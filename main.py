@@ -26,11 +26,13 @@ from utils.synbols_dset import get_synbols_data
 from continuum.datasets import InMemoryDataset
 from continuum.scenarios import ContinualScenario
 from time import time
+import torchvision.transforms as transforms
+from test_fn import test_single_exp_one_ring
 
 def main():
 
-    data_path = os.path.expanduser('~/data')
-
+    data_path = "/archive/HPCLab_exchange/4Mor"
+    print(args.distill_beta)
     # set seed of torch and othrs
     set_seed(args.seed)
 
@@ -71,11 +73,14 @@ def main():
     #pure la funzione di train va cambiata.
     if args.dataset == 'CIFAR100':
         class_order = list(range(100))
-        random.shuffle(class_order)
 
-        #creare un dataset
-        train_dataset = CIFAR100(data_path, download=True, train=True)
-        test_dataset = CIFAR100(data_path, download=True, train=False)
+        random.shuffle(class_order)
+        target_transform=transforms.Compose([transforms.ToTensor,
+                                             transforms.RandomErasing(p=1.0, scale=(0.02, 0.2), ratio=(0.3, 3.3), value=0)
+                                             ])
+                                                    #creare un dataset
+        train_dataset = CIFAR100(data_path, download=False, train=True)
+        test_dataset = CIFAR100(data_path, download=False, train=False)
 
         strategy.train_scenario = ClassIncremental(
             train_dataset,
@@ -174,7 +179,7 @@ def main():
         else:
             strategy.val_dataloader = DataLoader(strategy.test_scenario[i], batch_size=args.bsize, shuffle=True)
 
-        #################### TRAIN ########################### siamo ancora dentro al for che indicizza ciascun task
+        #################### TRAIN ###########################
 
         # instantiate new model
         #selezionare la strategia di self_distillation per velocizzare il training , ma in genere non va usata nel modello base
@@ -209,6 +214,8 @@ def main():
         #inizio del training fatto da MIND
         strategy.train()
 
+        #test_single_exp_one_ring(strategy, strategy.test_scenario[:11], i, distillation=False)
+        #input("fine test")
         # Freeze the model for distillation purposes
         strategy.distill_model = freeze_model(deepcopy(strategy.fresh_model))
         strategy.distill_model.to(args.device)
@@ -231,12 +238,15 @@ def main():
 
         #################### TEST ##########################
         # concatenate pytorch datasets up to the current experience
+        print("inizio test")
         with torch.no_grad():
             # write accuracy on the test set
             total_acc = 0
             task_acc = 0
             accuracy_e = 0
-            total_acc, task_acc, accuracy_e, accuracy_taw = test(strategy, strategy.test_scenario[:i+1])
+
+            confusion_mat = test_single_exp_one_ring(strategy, strategy.test_scenario[:11], i)
+            total_acc, task_acc, accuracy_e, accuracy_taw = test(strategy, strategy.test_scenario[:i + 1])
 
             with open(f"logs/{args.run_name}/results/total_acc.csv", "a") as f:
                 f.write(f"{strategy.experience_idx},{total_acc:.4f}\n")

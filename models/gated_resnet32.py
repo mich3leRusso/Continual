@@ -11,6 +11,7 @@ from torch import Tensor
 from copy import deepcopy
 from parse import args as OPT
 
+
 class GatedConv2d(torch.nn.Conv2d):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -120,7 +121,7 @@ class GatedCifarResNet(nn.Module):
     https://arxiv.org/abs/1512.03385.pdf
     """
 
-    def __init__(self, block, depth, channels=3,dropout_rate=0.1,classes_out=101):
+    def __init__(self, block, depth, channels=3,dropout_rate=0.1,classes_out=OPT.n_classes):
         super(GatedCifarResNet, self).__init__()
 
         # Model type specifies number of layers for CIFAR-10 and CIFAR-100 model

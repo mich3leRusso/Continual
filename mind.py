@@ -46,28 +46,38 @@ class MIND():
 
     def get_ce_loss(self):
         """ Cross entropy loss. """
-        return self.criterion(self.mb_output, self.mb_y.to(args.device))
+        if args.classes_per_exp <self.mb_output.shape[1]:
+            mb_output=self.mb_output[:,:-1]
+            return self.criterion(self.mb_output.to(args.device), self.mb_y.to(args.device))
+        return self.criterion(self.mb_output.to(args.device), self.mb_y.to(args.device))
 
     def get_one_ring_loss(self):
         "one ring loss definition"
 
         cross_entropy=self.criterion(self.mb_output, self.mb_y.to(args.device))
-        #rint(cross_entropy)
+
+
         #eliminare i pattern della classe reale e rimpiazzarli con la classe UNK
 
-        new_removed_y=torch.full(self.mb_y.shape, 50)#create new label vector
+        new_removed_y=torch.full(self.mb_y.shape, self.train_scenario.nb_classes)#create new label vector
 
         #create one hot encode
-        new_mb_y=torch.nn.functional.one_hot(new_removed_y, num_classes=51)
+        new_mb_y=torch.nn.functional.one_hot(new_removed_y, num_classes=self.train_scenario.nb_classes+1)
 
-        one_hot=torch.nn.functional.one_hot(self.mb_y, num_classes=51)
+        one_hot=torch.nn.functional.one_hot(self.mb_y, num_classes=self.train_scenario.nb_classes+1)
 
-        mask = one_hot.float().masked_fill(one_hot == 1, 0)
+        mask = one_hot==0
+        #print(mask)
+        #print(mask.shape)
+        #input("loss check")
+        mb_removed=self.mb_output.to(args.device)*mask.to(args.device)
+        #print(self.mb_y[0])
+        #print(mb_removed[0, :])
+        #input("second loss check")
+        #mb_removed=self.mb_output.to(args.device)+mask.to(args.device)
 
-        mb_removed=self.mb_output.to(args.device)+mask.to(args.device)
 
-
-
+        #plot_UNK_position(self.mb_output,0)
 
         cross_entropy_remove=self.criterion(mb_removed.to(args.device),new_removed_y.to(args.device) )
        #print(cross_entropy_remove)
@@ -75,7 +85,7 @@ class MIND():
 
         total_loss=cross_entropy+cross_entropy_remove
         #rint(total_loss)
-
+        print(f" CE loss: {cross_entropy}, One ring CE value: {cross_entropy_remove}")
         return total_loss
     def get_distill_loss_JS(self):
         """ Distillation loss. (jensen-shannon) """
@@ -158,6 +168,7 @@ class MIND():
                                                                plot=True)
 
                     f.write(f"{self.experience_idx},{self.distillation},{epoch},{acc_train:.4f},{acc_test:.4f}\n")
+                    #print(f"    loss achieved: CE loss : {loss_ce}, Distillation loss: {loss_distill/args.distill_beta}")
                 #print loss
                 #print(f"loss_ce: {loss_ce:.4f}, loss_distill: {loss_distill:.4f}")
 
@@ -187,9 +198,11 @@ class MIND():
             #test if  this modification work
             #print(self.mb_output.shape)
 
-            test=True
+            test=False
 
-            if test:
+            if self.epoch>50:
+                if self.epoch==51:
+                    print("START ONE RING")
                 self.loss_ce=self.get_one_ring_loss()
             else:
                 self.loss_ce = self.get_ce_loss()
@@ -236,6 +249,9 @@ class MIND():
 
             self.mb_output = self.model.forward(self.mb_x.to(args.device))
 
+            if i ==0:
+                plot_UNK_position(self.mb_output, self.experience_idx)
+
             if args.distill_beta > 0:
                 if args.distill_loss == 'JS':
                     self.loss_distill = args.distill_beta*self.get_distill_loss_JS()
@@ -246,8 +262,13 @@ class MIND():
                 elif args.distill_loss == 'L2':
                     self.loss_distill = args.distill_beta*self.get_distill_loss_L2()
                 
+            if self.epoch>40:
 
-            self.loss_ce = self.get_one_ring_loss()
+                self.loss_ce = self.get_one_ring_loss()
+                self.loss_distill=0.0
+            else:
+                self.loss_ce = self.get_ce_loss()
+
             self.loss += self.loss_ce + self.loss_distill
             self.loss.backward()
             
@@ -264,5 +285,34 @@ class MIND():
             unfreeze_model(self.model)
 
         return self.loss_ce, self.loss_distill
+
+def plot_UNK_position(probabilities, n_task):
+
+    starter_pos, ending_pos=n_task*10, (n_task+1)*10
+
+    prob_last=probabilities[:, -1:]
+
+    probs= torch.cat([probabilities[:, starter_pos:ending_pos], prob_last], dim=1)
+
+    probs= torch.softmax(probs, dim=1)
+
+    sorted_probs= probs.argsort(dim=1, descending=True)
+
+
+    sorted_probs=sorted_probs.tolist()
+    unk_pos = {}
+    for sorted_prob in sorted_probs:
+        #print(sorted_prob)
+        index=sorted_prob.index(10)
+        if index not in unk_pos.keys():
+            unk_pos[index] =  1
+        else:
+            unk_pos[index]= unk_pos[index]+1
+
+    print(f"position of UNK  {unk_pos}")
+
+    #input("STOP")
+
+
 
 
