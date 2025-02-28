@@ -59,8 +59,9 @@ class MIND():
 
         #eliminare i pattern della classe reale e rimpiazzarli con la classe UNK
 
-        new_removed_y=torch.full(self.mb_y.shape, self.train_scenario.nb_classes)#create new label vector
+        new_removed_y=torch.full(self.mb_y.shape, self.train_scenario.nb_classes-1)#create new label vector
 
+       # labels_unk = torch.LongTensor([9 for i in range(self.mb_y.shape[0])]).cuda()
         #create one hot encode
         new_mb_y=torch.nn.functional.one_hot(new_removed_y, num_classes=self.train_scenario.nb_classes+1)
 
@@ -75,18 +76,27 @@ class MIND():
         #print(mb_removed[0, :])
         #input("second loss check")
         #mb_removed=self.mb_output.to(args.device)+mask.to(args.device)
-
+        p = [(i, j.item()) for i, j in enumerate(self.mb_y)]
+        outs_ = torch.cat(
+            [torch.cat((self.mb_output[i][0:j], self.mb_output[i][j + 1:])) for i, j in p]
+        ).view(self.mb_output.shape[0], 100)
+        #print(outs_.shape)
+        #input("check")
+        #.view(self.mb_output.shape[0], 10)
+        #labels_unk = torch.LongTensor([9 for i in range(img_s.shape[0])]).cuda()
+        loss_unk = self.criterion(outs_.to(args.device), new_removed_y.to(args.device))
 
         #plot_UNK_position(self.mb_output,0)
 
-        cross_entropy_remove=self.criterion(mb_removed.to(args.device),new_removed_y.to(args.device) )
+        #cross_entropy_remove=self.criterion(mb_removed.to(args.device),new_removed_y.to(args.device) )
        #print(cross_entropy_remove)
 
 
-        total_loss=cross_entropy+cross_entropy_remove
+        total_loss=cross_entropy+loss_unk
         #rint(total_loss)
-        print(f" CE loss: {cross_entropy}, One ring CE value: {cross_entropy_remove}")
+        print(f" CE loss: {cross_entropy}, One ring CE value: {loss_unk}")
         return total_loss
+
     def get_distill_loss_JS(self):
         """ Distillation loss. (jensen-shannon) """
         with torch.no_grad():
@@ -262,7 +272,7 @@ class MIND():
                 elif args.distill_loss == 'L2':
                     self.loss_distill = args.distill_beta*self.get_distill_loss_L2()
                 
-            if self.epoch>40:
+            if self.epoch>10:
 
                 self.loss_ce = self.get_one_ring_loss()
                 self.loss_distill=0.0
