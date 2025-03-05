@@ -60,7 +60,8 @@ class MIND():
         #eliminare i pattern della classe reale e rimpiazzarli con la classe UNK
 
         new_removed_y=torch.full(self.mb_y.shape, self.train_scenario.nb_classes-1)#create new label vector
-
+        #print(self.mb_output[101,:5])
+        #input("look ")
        # labels_unk = torch.LongTensor([9 for i in range(self.mb_y.shape[0])]).cuda()
         #create one hot encode
         new_mb_y=torch.nn.functional.one_hot(new_removed_y, num_classes=self.train_scenario.nb_classes+1)
@@ -76,14 +77,17 @@ class MIND():
         #print(mb_removed[0, :])
         #input("second loss check")
         #mb_removed=self.mb_output.to(args.device)+mask.to(args.device)
+
         p = [(i, j.item()) for i, j in enumerate(self.mb_y)]
         outs_ = torch.cat(
             [torch.cat((self.mb_output[i][0:j], self.mb_output[i][j + 1:])) for i, j in p]
         ).view(self.mb_output.shape[0], 100)
+
         #print(outs_.shape)
         #input("check")
         #.view(self.mb_output.shape[0], 10)
         #labels_unk = torch.LongTensor([9 for i in range(img_s.shape[0])]).cuda()
+
         loss_unk = self.criterion(outs_.to(args.device), new_removed_y.to(args.device))
 
         #plot_UNK_position(self.mb_output,0)
@@ -94,7 +98,7 @@ class MIND():
 
         total_loss=cross_entropy+loss_unk
         #rint(total_loss)
-        print(f" CE loss: {cross_entropy}, One ring CE value: {loss_unk}")
+        #print(f" CE loss: {cross_entropy}, One ring CE value: {loss_unk}")
         return total_loss
 
     def get_distill_loss_JS(self):
@@ -259,8 +263,8 @@ class MIND():
 
             self.mb_output = self.model.forward(self.mb_x.to(args.device))
 
-            if i ==0:
-                plot_UNK_position(self.mb_output, self.experience_idx)
+            #if i ==0:
+                #plot_UNK_position(self.mb_output, self.experience_idx)
 
             if args.distill_beta > 0:
                 if args.distill_loss == 'JS':
@@ -272,10 +276,11 @@ class MIND():
                 elif args.distill_loss == 'L2':
                     self.loss_distill = args.distill_beta*self.get_distill_loss_L2()
                 
-            if self.epoch>10:
+            if self.epoch>=40:
 
                 self.loss_ce = self.get_one_ring_loss()
                 self.loss_distill=0.0
+
             else:
                 self.loss_ce = self.get_ce_loss()
 
@@ -288,12 +293,17 @@ class MIND():
             self.optimizer.step()
             self.optimizer.zero_grad()
 
-            
+
+
             freeze_model(self.model)
             #muta i pesi che erano stati mutati in precedenza
             self.pruner.ripristinate_weights(self.model, base_model, self.experience_idx, self.distillation)
             unfreeze_model(self.model)
-
+        #layers_last = list(self.model.named_parameters())[-1][1]
+        #print(layers_last.shape)
+        #print(layers_last[:2, :])
+        #print(layers_last[-1, :])
+        #input("check upgrade")
         return self.loss_ce, self.loss_distill
 
 def plot_UNK_position(probabilities, n_task):

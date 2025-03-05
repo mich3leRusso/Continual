@@ -87,6 +87,7 @@ class Pruner(object):
                 if module_idx == n_modules-2 and args.dataset != 'CORE50' and not args.self_distillation:
                     subset = torch.zeros_like(self.masks[module_idx])
                     subset[experience_idx*args.classes_per_exp:(experience_idx+1)*args.classes_per_exp, :] = 1
+                    subset[-1,:]=1
                     #convert subset to bool
                     subset = subset.to(torch.bool)
                 else:

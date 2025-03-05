@@ -212,7 +212,9 @@ def main():
 
         print(f'-.-.-.-.-.-. Start training on experience {i+1} - epochs: {strategy.train_epochs} .-.-.-.-.-.')
         #inizio del training fatto da MIND
-        strategy.train()
+        if args.load_model_from_run == '':
+            print("Skip training")
+            strategy.train() #mute the training in case we have this information and iterate till the last
 
         #test_single_exp_one_ring(strategy, strategy.test_scenario[:11], i, distillation=False)
         #input("fine test")
@@ -234,7 +236,9 @@ def main():
         strategy.scheduler = torch.optim.lr_scheduler.MultiStepLR(strategy.optimizer, milestones=args.scheduler_distillation, gamma=0.5, last_epoch=-1, verbose=False)
         print(f"    >>> Start Finetuning epochs: {args.epochs_distillation} <<<")
         strategy.pruner.set_gating_masks(strategy.model, strategy.experience_idx, weight_sharing=args.weight_sharing, distillation=strategy.distillation)
-        strategy.train()
+        if args.load_model_from_run == '':
+            print("Start training")
+            strategy.train()
 
         #################### TEST ##########################
         # concatenate pytorch datasets up to the current experience
@@ -254,7 +258,10 @@ def main():
                 f.write(f"{strategy.experience_idx},{accuracy_taw:.4f}\n")
 
         # save the model and the masks
-        if not args.load_model_from_run:
+        save_model=False
+
+        if not save_model:
+            print("is this saving????")
             torch.save(strategy.model.state_dict(), f"logs/{args.run_name}/checkpoints/weights.pt")
             torch.save(strategy.pruner.masks, f"logs/{args.run_name}/checkpoints/masks.pt")
             pkl.dump(strategy.model.bn_weights, open(f"logs/{args.run_name}/checkpoints/bn_weights.pkl", "wb"))

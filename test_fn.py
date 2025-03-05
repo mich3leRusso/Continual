@@ -130,16 +130,19 @@ def test(strategy, test_set, plot=False):
     dataloader = DataLoader(test_set, batch_size=1000, shuffle=False, num_workers=8)
 
     confusion_mat = torch.zeros((args.n_classes,args.n_classes))
+    confusion_mat_th = torch.zeros((args.n_classes,args.n_classes))
     confusion_mat_e = torch.zeros((args.n_classes,args.n_classes))
     confusion_mat_taw = torch.zeros((args.n_classes,args.n_classes))
 
     y_hats = []
     y_hats_e = []
+    y_hats_th = []
     y_taw = []
     ys = []
     task_predictions = []
     task_ids = []
-    in_distribution_test=True
+    dict_entropy={}
+
     # per diversi dataset quello che è usare diversi task id del dataset e vedere le performance della rete con l'inserimento di nuovi task id diversi
     for i, (x, y, task_id) in enumerate(dataloader):
         frag_preds = []
@@ -163,7 +166,13 @@ def test(strategy, test_set, plot=False):
                 pred = pred[:, j*args.classes_per_exp:(j+1)*args.classes_per_exp]
                 pred=torch.cat([pred, last], dim=1 )
 
-            softmax=torch.softmax(pred / args.temperature, dim=1)
+
+
+
+
+            softmax=torch.softmax(pred , dim=1)
+
+            entropia = entropy(softmax)
 
             #check the capture in the UNK task
             check=False
@@ -180,25 +189,73 @@ def test(strategy, test_set, plot=False):
                     log_file.write(f"Softmax (last column) task id: {task_id}, subnetwork {j} :\n{softmax[out_indexes, -1:]}\n\n")
                     #input("check")  # Keeps original behavior
 
-            softmax = torch.softmax(pred / args.temperature, dim=1)[:, :-1]
+            softmax = torch.softmax(pred , dim=1)[:, :-1] #remove the last class for the accuracy
 
-            entropia = entropy(softmax)
 
 
             frag_preds.append(softmax)
+
             entropy_frag.append(entropia)
 
-        #on_shell_confidence, elsewhere_confidence = confidence(frag_preds, task_id)
-        #print(f"on_shell confidence:{[round(c.item(), 2) for c in on_shell_confidence]}\nelsewhere confidence:{[round(c.item(), 2) for c in elsewhere_confidence]}")
+
+        #nello stesso for, quindi questi sono elementi dello stesso batch
 
         frag_preds = torch.stack(frag_preds)  # [n_frag, bsize, n_classes]
+
         entropy_frag = torch.stack(entropy_frag)  # [bsize, n_frag] contains the entropy
 
         batch_size = frag_preds.shape[1]
 
+        #divide per entropy
+        entropy_th=0.20
+
+        entropy_mask= entropy_frag<entropy_th #[nfrag, bsize]
+        frag_preds_th=frag_preds.clone()
+        entropy_good = torch.sum(entropy_mask, dim=0)
+
+        print(entropy_good.shape)
+        print(frag_preds_th.shape)
+        print(entropy_mask.shape)
+
+        for index in range(frag_preds.shape[1]):#scandisco le immagini
+
+            for value in range (entropy_mask.shape[0]):#scandisco i task
+
+                muted_tasks=entropy_mask[value, index]
+
+                #flag to zero, don't interfere
+
+                all_muted_flag= entropy_good[index]==0
+
+                if all_muted_flag:
+                    continue #don't do enything
+
+                else:
+
+                    if not muted_tasks:
+                        #mute the classes related to the task
+                        frag_preds_th[value, index,:]=0.0
+
+
+
+        #print(frag_preds_th)
+        #print(frag_preds)
+        #input("guarda un attimo")
+        #create a similar torch vector to check what happens by thesholding the entropy
+
+        for el in entropy_good:
+
+                if int(el.to("cpu")) not in dict_entropy.keys():
+
+                    dict_entropy[int(el.to("cpu"))]=1
+                else:
+                    dict_entropy[int(el.to("cpu"))]+=1
+
         ### select across the top 2 of likelihood the head  with the lowest entropy
-        # buff -> batch_size  x 2, 0-99 val 
+        # buff -> batch_size  x 2, 0-99 val
+
         buff = frag_preds.max(dim=-1)[0].argsort(dim=0)[-2:] # [2, bsize]
+        buff_th = frag_preds_th.max(dim=-1)[0].argsort(dim=0)[-2:] # [2, bsize]
 
         # buff_entropy ->  2 x batch_size, entropy values
         indices = torch.arange(batch_size)
@@ -225,28 +282,52 @@ def test(strategy, test_set, plot=False):
             y_taw.append(frag_preds[task_id.to(torch.int32), indices].argmax(dim=-1))
 
         else:
+            y_hats_th.append(frag_preds[buff_th[-1], indices].argmax(dim=1) + args.classes_per_exp*buff_th[-1])
             y_hats_e.append(frag_preds[index_class, indices].argmax(dim=1)+ args.classes_per_exp*index_class)
             y_hats.append(frag_preds[buff[-1], indices].argmax(dim=1) + args.classes_per_exp*buff[-1])
             y_taw.append(frag_preds[task_id.to(torch.int32), indices].argmax(dim=-1) + (args.classes_per_exp*task_id.to(args.cuda)).to(torch.int32))
 
-        task_ids.append(task_id)
+        task_ids.append(task_id) #real task id for each sample
         ys.append(y)
+
+    #print(dict_entropy)
+    total_number=sum(dict_entropy.values())
+
+    bins = list(dict_entropy.keys())
+    frequencies = list(dict_entropy.values())
+    #to cpu
+    # Plot the bar chart
+    plt.bar(bins, frequencies, width=0.5, color='blue', edgecolor='black', alpha=0.7)
+
+    # Labels and title
+    plt.xlabel('number of elements below min th')
+    plt.ylabel('Frequency')
+    plt.title('Frequency of tasks under the minimum entropy per image')
+    plt.xticks(bins)
+    plt.savefig(f"distribution_{strategy.experience_idx}.png", dpi=300, bbox_inches='tight')
+    plt.close()
 
     # concat labels and preds
     y_hats = torch.cat(y_hats, dim=0).to('cpu')
+    y_hats_th = torch.cat(y_hats_th, dim=0).to('cpu')
     y_hats_e = torch.cat(y_hats_e, dim=0).to('cpu')
     y = torch.cat(ys, dim=0).to('cpu')
     y_taw = torch.cat(y_taw, dim=0).to('cpu')
     task_predictions = torch.cat(task_predictions, dim=0).to('cpu')
+
     task_ids = torch.cat(task_ids, dim=0).to('cpu')
+    print(f"number of samples below the threshold th 0.20 : {total_number}, total number of samples: {y.shape[0]}")
 
-
-    # assign +1 to the confusion matrix for each prediction that matches the label
 
     for i in range(y.shape[0]):
         confusion_mat[y[i], y_hats[i]] += 1
+        confusion_mat_th[y[i], y_hats_th[i]] += 1
         confusion_mat_e[y[i], y_hats_e[i]] += 1
         confusion_mat_taw[y[i], y_taw[i]] += 1
+
+        #find this entropy
+
+
 
 
     
@@ -257,19 +338,22 @@ def test(strategy, test_set, plot=False):
         strategy.confusion_mat_task[i][j] = acc_conf_mat_task
         strategy.forgetting_mat[i][j] = strategy.confusion_mat_task[:, j].max()-acc_conf_mat_task
 
+    # You should divide the accuracy with 0.2 for the choosen task , and see whether the accuracy is good or not
 
-    
-        
     # compute accuracy
     accuracy = confusion_mat.diag().sum() / confusion_mat.sum()
+    accuracy_th = confusion_mat_th.diag().sum() / confusion_mat_th.sum()
     accuracy_e = confusion_mat_e.diag().sum() / confusion_mat_e.sum()
     accuracy_taw = confusion_mat_taw.diag().sum() / confusion_mat_taw.sum()
 
 
-    task_accuracy = (task_predictions==task_ids).sum()/y_hats.shape[0]
 
-    print(f"Test Accuracy: {accuracy:.4f},Test Accuracy with entropy: {accuracy_e:.4f},Test Accuracy taw: {accuracy_taw:.4f}, Task accuracy: {task_accuracy:.4f}")
+    task_accuracy = (task_predictions==task_ids).sum()/y_hats.shape[0] #modificare questa cosa
+
+    print(f"Test Accuracy: {accuracy:.4f},Test Accuracy with entropy: {accuracy_e:.4f},Test Accuracy taw: {accuracy_taw:.4f}, Task accuracy: {task_accuracy:.4f}, accuracy_th: {accuracy_th}")
     get_stat_exp(y, y_hats, strategy.experience_idx, task_ids,task_predictions)
+    print("using accuracy_th")
+    get_stat_exp(y,y_hats_th, strategy.experience_idx, task_ids,task_predictions)
 
     if plot:
         plt_test_confmat(args.run_name, confusion_mat, strategy.experience_idx)
@@ -327,6 +411,7 @@ def test_single_exp_one_ring(strategy,  loader, exp_idx, distillation=True):
     entropy_vector=[]
     entropy_vector_unk=[]
     entropy_total=[]
+
 
     for i, (x, y, task_id) in enumerate(dataloader):
 
@@ -395,7 +480,7 @@ def test_single_exp_one_ring(strategy,  loader, exp_idx, distillation=True):
 
         #y[i], y_hats[i]
 
-        if entropy_total[i]<0.1: #classificati come task elements
+        if entropy_total[i]<0.25: #classificati come task elements
 
 
             if y[i]==10:
@@ -417,45 +502,50 @@ def test_single_exp_one_ring(strategy,  loader, exp_idx, distillation=True):
 
         confusion_mat[y[i], y_hats[i]] += 1  # Normal case: assign confusion matrix
 
-    print(f"task accuracyh with entropy th 0.1 {task_accuracy/y.shape[0]}")
-    
-    task_accuracy = compute_task_accuracy(confusion_mat_min)
-    print(task_accuracy)
-    print(confusion_mat_min)
-    print(f"number of elements: {confusion_mat_min.sum()}")
-    #input("<0.1 task label")
-    task_accuracy = compute_task_accuracy(confusion_mat_min_unk)
-    print(task_accuracy)
-    print(f"number of elements: {confusion_mat_min_unk.sum()}")
-    #input("<0.1 unk label")
-    print(confusion_mat_min_unk)
-    task_accuracy = compute_task_accuracy(confusion_mat_m)
-    print(task_accuracy)
-    print(confusion_mat_m)
-    print(f"number of elements: {confusion_mat_m.sum()}")
-   # input(">=0.1 task label")
-    task_accuracy = compute_task_accuracy(confusion_mat_m_unk)
-    print(task_accuracy)
-    print(confusion_mat_m_unk)
-    print(f"number of elements: {confusion_mat_m_unk.sum()}")
-    #input(">=0.1 unk label")
+    print(f"task accuracy with entropy th 0.25 {task_accuracy/y.shape[0]}")
+    sanity_check=True
+
+    if sanity_check:
+        task_accuracy = compute_task_accuracy(confusion_mat_min)
+        print(task_accuracy)
+        print(confusion_mat_min)
+        print(f"number of elements: {confusion_mat_min.sum()}")
+        #input("<0.1 task label")
+        task_accuracy = compute_task_accuracy(confusion_mat_min_unk)
+        print(task_accuracy)
+        print(f"number of elements: {confusion_mat_min_unk.sum()}")
+        #input("<0.1 unk label")
+        print(confusion_mat_min_unk)
+        task_accuracy = compute_task_accuracy(confusion_mat_m)
+        print(task_accuracy)
+        print(confusion_mat_m)
+        print(f"number of elements: {confusion_mat_m.sum()}")
+       # input(">=0.1 task label")
+        task_accuracy = compute_task_accuracy(confusion_mat_m_unk)
+        print(task_accuracy)
+        print(confusion_mat_m_unk)
+        print(f"number of elements: {confusion_mat_m_unk.sum()}")
+        #input(">=0.1 unk label")
 
     # Plot histograms
     plt.figure(figsize=(10, 6))
     entropy_vector = np.array(entropy_vector, dtype=float)
     entropy_vector_unk = np.array(entropy_vector_unk, dtype=float)
     sns.histplot(entropy_vector, bins=30, color='blue', label="Entropy 1", alpha=0.6)
-    sns.histplot(entropy_vector_unk[:1000], bins=30,  color='red', label="Entropy 2", alpha=0.6)
+    sns.histplot(entropy_vector_unk, bins=30,  color='red', label="Entropy 2", alpha=0.6)
 
     # Labels and legend
     plt.xlabel("Entropy Value")
     plt.ylabel("Frequency")
     plt.title("Histogram of Two Entropy Distributions")
     plt.legend()
-    plt.show()
 
-    input("STOP")
-    print(confusion_mat)
+    #plt.show()
+    # Save the plot instead of showing it
+    plt.savefig(f"entropy_histogram_{strategy.experience_idx}.png", dpi=300, bbox_inches='tight')
+    plt.close()  # Close the figure to free memory
+    #input("STOP")
+    #print(confusion_mat)
     # Convert to NumPy and save to a text file
     np.savetxt(f"confusion_matrix_{exp_idx}.txt", confusion_mat.numpy(), fmt='%d')
     #input("funzione di confsione rotta")
