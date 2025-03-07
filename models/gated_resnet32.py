@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from copy import deepcopy
 from parse import args as OPT
-
+import numpy as np
 
 class GatedConv2d(torch.nn.Conv2d):
     def __init__(self, *args, **kwargs) -> None:
@@ -148,10 +148,10 @@ class GatedCifarResNet(nn.Module):
             expansion = block.expansion
 
         #expansion = block.expansion
-
         self.out_dim = 64 * block.expansion
         #add one more dimension for unk
-        self.fc = GatedLinear(64*expansion, classes_out+1, bias=False)
+
+        self.fc = GatedLinear(64*expansion, classes_out+10, bias=False)
         self.output_mask = {}
         self.exp_idx = -1
         self.bn_weights = {}
@@ -198,6 +198,7 @@ class GatedCifarResNet(nn.Module):
         #     'fmaps': [x_1, x_2, x_3],
         #     'features': features
         # }
+        #print(self.output_mask[self.exp_idx])
         return self.fc(features) * self.output_mask[self.exp_idx]
 
         
@@ -229,10 +230,13 @@ class GatedCifarResNet(nn.Module):
         self.exp_idx = exp_idx
         # n_classes = TOTAL number of classes , create the one hot encode for this experience , the output is a vector that has length the TOTAL number of classes, and
         # creates the one hot encorde for each task in this experience
-        mask=torch.nn.functional.one_hot( torch.tensor(classes_in_this_exp), num_classes=OPT.n_classes).sum(dim=0).float().to(OPT.device)
+        #append class unk
+        classes_in_this_exp=np.append(classes_in_this_exp, OPT.n_classes+exp_idx)
+        mask=torch.nn.functional.one_hot( torch.tensor(classes_in_this_exp), num_classes=OPT.n_classes+10).sum(dim=0).float().to(OPT.device)
+
 
         #add one more dimension in the end that represents the UNK mask
-        mask=torch.cat([mask, torch.tensor([1.0], device=mask.device)])
+        #mask=torch.cat([mask, torch.tensor([1.0], device=mask.device)])
 
         self.output_mask[exp_idx] = mask
     def save_bn_params(self, task_id):

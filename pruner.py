@@ -47,12 +47,14 @@ class Pruner(object):
         """Ripristinates the gradients of the new model from the old model."""
 
         for module_idx, (module, old_module) in enumerate(zip(model.modules(), old_model.modules())):
+
             if isinstance(module, nn.Conv2d) or isinstance(module, nn.Linear):
                 layer_mask = self.masks[module_idx]
                 # if distillation:
                 if args.self_distillation and not distillation:
                     module.weight[layer_mask != -1] = old_module.weight[layer_mask != -1]
                 else:
+                    #print("sono entrato nell'else")
                     module.weight[layer_mask != experience_idx] = old_module.weight[layer_mask != experience_idx]
     # trova i pesi più importanti dati i pesi vergine mask
     def most_important_weights_mask(self, weights, mask):
@@ -87,7 +89,8 @@ class Pruner(object):
                 if module_idx == n_modules-2 and args.dataset != 'CORE50' and not args.self_distillation:
                     subset = torch.zeros_like(self.masks[module_idx])
                     subset[experience_idx*args.classes_per_exp:(experience_idx+1)*args.classes_per_exp, :] = 1
-                    subset[-1,:]=1
+                    subset[args.n_classes+experience_idx,:]=1
+
                     #convert subset to bool
                     subset = subset.to(torch.bool)
                 else:
@@ -95,7 +98,9 @@ class Pruner(object):
                         subset= self.most_important_weights_mask(module.weight, self.masks[module_idx])
                     else:
                         subset= self.select_random_weights(module.weight, self.masks[module_idx])
+
                 self.masks[module_idx][subset] = experience_idx
+
 
                 #when self distillation, set fresh model weights as starting point
                 if self_distillation:
@@ -132,8 +137,9 @@ class Pruner(object):
             if isinstance(module, nn.Conv2d) or isinstance(module, nn.Linear):
                 #maschera creata in precedenza quando è stata costruita la rete
                 layer_mask = self.masks[module_idx]
-                if distillation:
-                    if weight_sharing:
+
+                if distillation: #se distilli fai questo
+                    if weight_sharing:#non ci entra
                         module.mask = torch.logical_and(layer_mask <= task_id, layer_mask != -1).to(module.weight.device)
                     else:
                         module.mask = (layer_mask == task_id).to(torch.float32).to(module.weight.device) 

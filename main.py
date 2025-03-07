@@ -18,6 +18,7 @@ from continuum import ClassIncremental
 from continuum.tasks import split_train_val
 from continuum.datasets import CIFAR100,Core50
 from test_fn import test
+from test_fn import test_onering
 import pickle as pkl
 from parse import args
 from utils.core50dset import get_all_core50_data, get_all_core50_scenario
@@ -27,12 +28,13 @@ from continuum.datasets import InMemoryDataset
 from continuum.scenarios import ContinualScenario
 from time import time
 import torchvision.transforms as transforms
-from test_fn import test_single_exp_one_ring
+from test_fn import test_robustness_OOD
 
 def main():
 
     data_path = "/archive/HPCLab_exchange/4Mor"
-    print(args.distill_beta)
+
+
     # set seed of torch and othrs
     set_seed(args.seed)
 
@@ -154,6 +156,7 @@ def main():
     print(f"Number of tasks: {strategy.train_scenario.nb_tasks}.")
 
     if args.load_model_from_run:
+        print("sta entrando qua???")
         strategy.pruner.masks = torch.load(f"logs/{args.load_model_from_run}/checkpoints/masks.pt")
 
     #indicizza per task
@@ -213,10 +216,14 @@ def main():
         print(f'-.-.-.-.-.-. Start training on experience {i+1} - epochs: {strategy.train_epochs} .-.-.-.-.-.')
         #inizio del training fatto da MIND
         if args.load_model_from_run == '':
-            print("Skip training")
+            print("Start training")
             strategy.train() #mute the training in case we have this information and iterate till the last
 
-        #test_single_exp_one_ring(strategy, strategy.test_scenario[:11], i, distillation=False)
+        #check if you want to see the OOD distribution
+        sanity_check=True
+
+        if sanity_check:
+            test_robustness_OOD(strategy, strategy.test_scenario[:11], i, distillation=False)
         #input("fine test")
         # Freeze the model for distillation purposes
         strategy.distill_model = freeze_model(deepcopy(strategy.fresh_model))
@@ -249,8 +256,13 @@ def main():
             task_acc = 0
             accuracy_e = 0
 
-            confusion_mat = test_single_exp_one_ring(strategy, strategy.test_scenario[:11], i)
+            if sanity_check:
+                confusion_mat = test_robustness_OOD(strategy, strategy.test_scenario[:11], i, sanity_check)
+            total_acc, task_acc, accuracy_e, accuracy_taw = test_onering(strategy, strategy.test_scenario[:i + 1]) #(to be tested and debugged )
             total_acc, task_acc, accuracy_e, accuracy_taw = test(strategy, strategy.test_scenario[:i + 1])
+
+
+
 
             with open(f"logs/{args.run_name}/results/total_acc.csv", "a") as f:
                 f.write(f"{strategy.experience_idx},{total_acc:.4f}\n")
@@ -258,10 +270,10 @@ def main():
                 f.write(f"{strategy.experience_idx},{accuracy_taw:.4f}\n")
 
         # save the model and the masks
-        save_model=False
+        save_model=True
 
         if not save_model:
-            print("is this saving????")
+            print("SAVING THE MODEL")
             torch.save(strategy.model.state_dict(), f"logs/{args.run_name}/checkpoints/weights.pt")
             torch.save(strategy.pruner.masks, f"logs/{args.run_name}/checkpoints/masks.pt")
             pkl.dump(strategy.model.bn_weights, open(f"logs/{args.run_name}/checkpoints/bn_weights.pkl", "wb"))
