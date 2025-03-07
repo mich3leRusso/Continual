@@ -220,11 +220,12 @@ def main():
             strategy.train() #mute the training in case we have this information and iterate till the last
 
         #check if you want to see the OOD distribution
-        sanity_check=True
+        sanity_check=False
 
         if sanity_check:
             test_robustness_OOD(strategy, strategy.test_scenario[:11], i, distillation=False)
         #input("fine test")
+        sanity_check = True
         # Freeze the model for distillation purposes
         strategy.distill_model = freeze_model(deepcopy(strategy.fresh_model))
         strategy.distill_model.to(args.device)
@@ -258,7 +259,7 @@ def main():
 
             if sanity_check:
                 confusion_mat = test_robustness_OOD(strategy, strategy.test_scenario[:11], i, sanity_check)
-            total_acc, task_acc, accuracy_e, accuracy_taw = test_onering(strategy, strategy.test_scenario[:i + 1]) #(to be tested and debugged )
+            #total_acc, task_acc, accuracy_e, accuracy_taw = test_onering(strategy, strategy.test_scenario[:i + 1]) #(to be tested and debugged )
             total_acc, task_acc, accuracy_e, accuracy_taw = test(strategy, strategy.test_scenario[:i + 1])
 
 
