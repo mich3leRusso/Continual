@@ -90,7 +90,7 @@ def test_onering(strategy, test_set, plot=False):
         # nello stesso for, quindi questi sono elementi dello stesso batch
 
         frag_preds_max=torch.argsort(frag_preds[:,:args.n_classes],dim=1,descending=True)[:, 0]
-        task_predicted=torch.round(frag_preds_max/10)
+        task_predicted=torch.floor(frag_preds_max/10)
 
         #for the task awareness
         task_id_int = task_id.to(torch.int32)  # Convert to Python int
@@ -215,6 +215,8 @@ def test(strategy, test_set, plot=True):
 
         ### select across the top 2 of likelihood the head  with the lowest entropy
         # buff -> batch_size  x 2, 0-99 val
+
+        #max among the classes,           sort the max classes and take the two most likely
         buff = frag_preds.max(dim=-1)[0].argsort(dim=0)[-2:]  # [2, bsize]
 
         # buff_entropy ->  2 x batch_size, entropy values
