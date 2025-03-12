@@ -9,7 +9,8 @@ from torchvision import transforms
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-
+from utils.transforms import expansion_transforms
+import os
 def get_stat_exp(y,y_hats,exp_idx, task_id,task_predictions):
     """ Compute accuracy and task accuracy for each experience."""
     conf_mat = torch.zeros((exp_idx+1, exp_idx+1))
@@ -172,11 +173,121 @@ def test_onering(strategy, test_set, plot=False):
     return accuracy, task_accuracy , accuracy_taw
 
 
-def test(strategy, test_set, plot=True):
+def apply_transforms_and_permute(batch, num_permutations):
+    """
+    Apply default transforms and generate permutations of each image in a batch.
+
+    Args:
+        batch (torch.Tensor): Tensor of shape (batch_size, channels, height, width)
+        num_permutations (int): Number of permutations per image
+
+    Returns:
+        torch.Tensor: Tensor of shape (batch_size * num_permutations, channels, height, width)
+    """
+    batch_size, channels, height, width = batch.shape
+    permuted_images = []
+
+    for img in batch:
+        #keep the original image
+        permuted_images.append(img)
+        for _ in range(num_permutations-1):
+            transformed_img = expansion_transforms(img)  # Apply transformations to tensor
+
+            permuted_images.append(transformed_img)
+
+    return torch.stack(permuted_images, dim=0)
+
+def process_permuted_images(batch, model , num_permutations, exp_idx):
+    """
+    Computes network output for all permuted images and aggregates per original image.
+
+    Args:
+        batch (torch.Tensor): Original batch of images (batch_size, channels, height, width)
+        model (nn.Module): A neural network model
+        num_permutations (int): Number of permutations per image
+
+    Returns:
+        torch.Tensor: Aggregated output per original image (batch_size, output_dim)
+    """
+    batch_size = batch.shape[0]
+
+    # Generate permuted images
+    permuted_batch = apply_transforms_and_permute(batch, num_permutations)
+
+    # Compute outputs for permuted images
+    permuted_outputs = model(permuted_batch.to(args.device))  # Shape: (batch_size * num_permutations, output_dim)
+
+
+
+    # Aggregate results per original image (e.g., averaging across permutations)
+
+    return permuted_outputs
+def position( probs, entropies,  temperature, th=0.20 ):
+    """
+    This function creates an histogram that
+    keeps  track of the task that have a lower entropy thant the th value
+    for each image"""
+    probs_th=probs.clone()
+
+    #print(probs.shape)#[ n_frag,n_batch ,n_class] [task, immagine, classi del task]
+    #print(entropies.shape)#[n_frag, batch]
+    #input("observe the shapes")
+
+    masked_entropies=entropies<th
+
+    dict_entropy={}
+    for index in range(entropies.shape[1]):#fix the image
+        counter=0
+        #probs_im=probs[:,index,:]
+        for task in range(entropies.shape[0]):
+
+            if masked_entropies[:, index].sum()==0:
+                #print(masked_entropies[:, index])
+                continue# skip if the image has all the values strictly major than the th
+            else:
+                if masked_entropies[task, index]:# True if below the threshold
+                    counter+=1
+                    #continue #keep the values
+                else:# remove the probs if above the threshold
+                    probs_th[task, index,:]=0
+
+
+        if counter not in dict_entropy.keys():
+            dict_entropy[counter]=1
+        else:
+            dict_entropy[counter]+=1
+
+    #save the histogram
+
+    plt.figure(figsize=(8, 5))
+    plt.bar(list(dict_entropy.keys()), list(dict_entropy.values()), color='blue', alpha=0.7)
+    plt.xlabel("Number of Tasks Below Threshold")
+    plt.ylabel("Frequency")
+    plt.title("Histogram of Task Counts Below Entropy Threshold")
+    plt.xticks(sorted(dict_entropy.keys()))
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    # Define the folder path
+
+    save_dir = f"/davinci-1/home/micherusso/PycharmProjects/MIND_real/plots/run_{args.seed}"
+
+    # Create the directory if it doesn't exist
+    os.makedirs(save_dir, exist_ok=True)
+
+    # Save the plot
+    plt.savefig(f"{save_dir}/entropy_histogram_{temperature}.png")
+    #plt.show()
+    # Save plot)
+    #print(dict_entropy)
+    return probs_th
+
+
+
+def test(strategy, test_set, temperature, plot=True, ):
     strategy.model.eval()
     dataloader = DataLoader(test_set, batch_size=1000, shuffle=False, num_workers=8)
 
     confusion_mat = torch.zeros((args.n_classes, args.n_classes))
+    confusion_mat_th = torch.zeros((args.n_classes, args.n_classes))
     confusion_mat_e = torch.zeros((args.n_classes, args.n_classes))
     confusion_mat_taw = torch.zeros((args.n_classes, args.n_classes))
 
@@ -186,24 +297,49 @@ def test(strategy, test_set, plot=True):
     ys = []
     task_predictions = []
     task_ids = []
+    y_hats_th=[]
+    permutations = False
+    check_entropy_th=False
+
     for i, (x, y, task_id) in enumerate(dataloader):
         frag_preds = []
         entropy_frag = []
+        batch_size=y.shape[0]
         for j in range(strategy.experience_idx + 1):
             # create a temporary model copy
             model = freeze_model(deepcopy(strategy.model))
 
             strategy.pruner.set_gating_masks(model, j, weight_sharing=args.weight_sharing, distillation=True)
+
             model.load_bn_params(j)
             model.exp_idx = j
 
-            pred = model(x.to(args.device))
+            #new Permutations
+            if permutations:
+                pred=process_permuted_images(x, model, 5, j)
+            else:
+
+                pred = model(x.to(args.device))
+
             if not args.dataset == 'CORE50':
+                last = pred[:, args.n_classes + j].unsqueeze(1)
+
                 pred = pred[:, j * args.classes_per_exp:(j + 1) * args.classes_per_exp]
+                pred = torch.cat([pred, last], dim=1)
+
+
 
             #mute the unk_classes
-            frag_preds.append(torch.softmax(pred , dim=1)[:,:args.n_classes])
-            entropy_frag.append(entropy(torch.softmax(pred , dim=1)))
+            probs=torch.softmax(pred /temperature, dim=1)
+            #print(probs.shape)
+            if permutations:
+                probs= probs.view(batch_size, 5, 11)
+
+                probs = probs.mean(dim=1)  # Shape: (batch_size, output_dim)
+            #print(probs.size)
+            #input("check")
+            frag_preds.append(probs[:, :-1])
+            entropy_frag.append(entropy(torch.softmax(pred /temperature, dim=1)))
 
         # on_shell_confidence, elsewhere_confidence = confidence(frag_preds, task_id)
         # print(f"on_shell confidence:{[round(c.item(), 2) for c in on_shell_confidence]}\nelsewhere confidence:{[round(c.item(), 2) for c in elsewhere_confidence]}")
@@ -215,9 +351,15 @@ def test(strategy, test_set, plot=True):
 
         ### select across the top 2 of likelihood the head  with the lowest entropy
         # buff -> batch_size  x 2, 0-99 val
+        #frag_preds_th=torch.zeros(frag_preds.shape).to("cpu")
+
+        if check_entropy_th:
+            print(" TH USED FOR THE ENTROPIES")
+            frag_preds_th= position( frag_preds,entropy_frag, temperature)
 
         #max among the classes,           sort the max classes and take the two most likely
         buff = frag_preds.max(dim=-1)[0].argsort(dim=0)[-2:]  # [2, bsize]
+        #buff_th = frag_preds_th.max(dim=-1)[0].argsort(dim=0)[-2:].to("cpu")  # [2, bsize]
 
         # buff_entropy ->  2 x batch_size, entropy values
         indices = torch.arange(batch_size)
@@ -236,12 +378,14 @@ def test(strategy, test_set, plot=True):
         task_predictions.append(buff[-1])
         if args.dataset == 'CORE50':
             y_hats.append(frag_preds[buff[-1], indices].argmax(dim=1))
+            #y_hats_th.append(frag_preds[buff_th[-1], indices].argmax(dim=1))
             y_hats_e.append(frag_preds[index_class, indices].argmax(dim=1))
             y_taw.append(frag_preds[task_id.to(torch.int32), indices].argmax(dim=-1))
 
         else:
             y_hats_e.append(frag_preds[index_class, indices].argmax(dim=1) + args.classes_per_exp * index_class)
             y_hats.append(frag_preds[buff[-1], indices].argmax(dim=1) + args.classes_per_exp * buff[-1])
+            #y_hats_th.append(frag_preds_th[buff[-1], indices].argmax(dim=1) + args.classes_per_exp * buff_th[-1])
             y_taw.append(frag_preds[task_id.to(torch.int32), indices].argmax(dim=-1) + (
                         args.classes_per_exp * task_id.to(args.cuda)).to(torch.int32))
 
@@ -250,6 +394,7 @@ def test(strategy, test_set, plot=True):
 
     # concat labels and preds
     y_hats = torch.cat(y_hats, dim=0).to('cpu')
+    #y_hats_th = torch.cat(y_hats_th, dim=0).to('cpu')
     y_hats_e = torch.cat(y_hats_e, dim=0).to('cpu')
     y = torch.cat(ys, dim=0).to('cpu')
     y_taw = torch.cat(y_taw, dim=0).to('cpu')
@@ -259,6 +404,7 @@ def test(strategy, test_set, plot=True):
     # assign +1 to the confusion matrix for each prediction that matches the label
     for i in range(y.shape[0]):
         confusion_mat[y[i], y_hats[i]] += 1
+        #confusion_mat_th[y[i], y_hats_th[i]] += 1
         confusion_mat_e[y[i], y_hats_e[i]] += 1
         confusion_mat_taw[y[i], y_taw[i]] += 1
 
@@ -275,12 +421,16 @@ def test(strategy, test_set, plot=True):
 
     # compute accuracy
     accuracy = confusion_mat.diag().sum() / confusion_mat.sum()
+    accuracy_th = confusion_mat_th.diag().sum() / confusion_mat_th.sum()
     accuracy_e = confusion_mat_e.diag().sum() / confusion_mat_e.sum()
     accuracy_taw = confusion_mat_taw.diag().sum() / confusion_mat_taw.sum()
 
     task_accuracy = (task_predictions == task_ids).sum() / y_hats.shape[0]
     print(
         f"Test Accuracy: {accuracy:.4f},Test Accuracy with entropy: {accuracy_e:.4f},Test Accuracy taw: {accuracy_taw:.4f}, Task accuracy: {task_accuracy:.4f}")
+    if check_entropy_th:
+        get_stat_exp(y, y_hats_th, strategy.experience_idx, task_ids, task_predictions)
+
     get_stat_exp(y, y_hats, strategy.experience_idx, task_ids, task_predictions)
 
     if plot:
@@ -352,7 +502,7 @@ def test_single_exp_onering(pruner, tested_model, loader, exp_idx, distillation)
 
     return confusion_mat
 
-def test_robustness_OOD(strategy,  loader, exp_idx, distillation=True, sanity_check=False):
+def test_robustness_OOD(strategy,  loader, exp_idx, temperature, distillation=True, sanity_check=False, ):
 
     dataloader = DataLoader(loader, batch_size=100, shuffle=False, num_workers=8)
     confusion_mat = torch.zeros((args.classes_per_exp+1, args.classes_per_exp+1),  dtype=torch.int32)
@@ -386,7 +536,7 @@ def test_robustness_OOD(strategy,  loader, exp_idx, distillation=True, sanity_ch
         preds = preds[:, exp_idx * args.classes_per_exp:(exp_idx + 1) * args.classes_per_exp]
         preds = torch.cat([preds, last], dim=1)
 
-        preds=torch.softmax(preds, dim=1)
+        preds=torch.softmax(preds/temperature, dim=1)
 
         entropia=entropy(preds)
 
@@ -461,26 +611,31 @@ def test_robustness_OOD(strategy,  loader, exp_idx, distillation=True, sanity_ch
 
     if sanity_check:
         task_accuracy = compute_task_accuracy(confusion_mat_min)
-        print(task_accuracy)
-        print(confusion_mat_min)
-        print(f"number of elements: {confusion_mat_min.sum()}")
+        #print(task_accuracy)
+        #print(confusion_mat_min)
+        #print(f"number of elements: {confusion_mat_min.sum()}")
         #input("<0.1 task label")
         task_accuracy = compute_task_accuracy(confusion_mat_min_unk)
-        print(task_accuracy)
-        print(f"number of elements: {confusion_mat_min_unk.sum()}")
+        #print(task_accuracy)
+        #print(f"number of elements: {confusion_mat_min_unk.sum()}")
         #input("<0.1 unk label")
-        print(confusion_mat_min_unk)
+        #print(confusion_mat_min_unk)
         task_accuracy = compute_task_accuracy(confusion_mat_m)
-        print(task_accuracy)
-        print(confusion_mat_m)
-        print(f"number of elements: {confusion_mat_m.sum()}")
+        #print(task_accuracy)
+        #print(confusion_mat_m)
+        #print(f"number of elements: {confusion_mat_m.sum()}")
        # input(">=0.1 task label")
         task_accuracy = compute_task_accuracy(confusion_mat_m_unk)
-        print(task_accuracy)
-        print(confusion_mat_m_unk)
-        print(f"number of elements: {confusion_mat_m_unk.sum()}")
+        #print(task_accuracy)
+        #print(confusion_mat_m_unk)
+        #print(f"number of elements: {confusion_mat_m_unk.sum()}")
         #input(">=0.1 unk label")
 
+    save_dir = f"plots/run_{args.seed}"
+
+    # Create the directory if it doesn't exist
+    os.makedirs(save_dir, exist_ok=True)
+    
     # Plot histograms
     plt.figure(figsize=(10, 6))
     entropy_vector = np.array(entropy_vector, dtype=float)
@@ -496,16 +651,16 @@ def test_robustness_OOD(strategy,  loader, exp_idx, distillation=True, sanity_ch
 
     #plt.show()
     # Save the plot instead of showing it
-    plt.savefig(f"entropy_histogram_{strategy.experience_idx}.png", dpi=300, bbox_inches='tight')
+    plt.savefig(f"plots/run_{args.seed}/entropy_histogram_{strategy.experience_idx}_{temperature}.png", dpi=300, bbox_inches='tight')
     plt.close()  # Close the figure to free memory
     #input("STOP")
     #print(confusion_mat)
     # Convert to NumPy and save to a text file
-    np.savetxt(f"confusion_matrix_{exp_idx}.txt", confusion_mat.numpy(), fmt='%d')
+    np.savetxt(f"plots/run_{args.seed}/confusion_matrix_{exp_idx}_{temperature}.txt", confusion_mat.numpy(), fmt='%d')
     #input("funzione di confsione rotta")
     task_accuracy = compute_task_accuracy(confusion_mat)
 
-    print(f"Accuracy for Task {exp_idx}: {task_accuracy:.4f}")
+    #print(f"Accuracy for Task {exp_idx}: {task_accuracy:.4f}")
     #input("STOP")
     return confusion_mat
 

@@ -16,8 +16,8 @@ def get_args():
     parser.add_argument("--run_name", type=str, default="test")
     parser.add_argument("--dataset", type=str, default="CIFAR100")
     parser.add_argument("--cuda", type=int, default=0, help="Select zero-indexed cuda device. -1 to use CPU.")
-    parser.add_argument("--temperature", type=float, default=6.5)
 
+    parser.add_argument('--temperature', nargs='+', type=float, help="List of floating-point numbers")
     parser.add_argument("--seed", type=int, default=0)
 
     parser.add_argument("--num_workers", type=int, default=4)

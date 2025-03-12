@@ -11,6 +11,12 @@ default_transforms = [
         ),
     ]
 
+expansion_transforms = transforms.Compose([
+    transforms.RandomCrop(32, padding=4),
+    transforms.RandomHorizontalFlip(),
+    transforms.ColorJitter(brightness=63 / 255),
+    transforms.Normalize((0.5071, 0.4865, 0.4409), (0.2673, 0.2564, 0.2762)),
+])
 
 custom_transforms = [
         transforms.RandomCrop(32, padding=4),

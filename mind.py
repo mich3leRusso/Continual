@@ -240,7 +240,7 @@ class MIND():
             self.loss_ce_onering = torch.tensor(0.).to(args.device)
 
             self.mb_output = self.model.forward(self.mb_x.to(args.device))
-            plot_UNK_position(self.mb_output, self.experience_idx)
+            #plot_UNK_position(self.mb_output, self.experience_idx)
 
 
 

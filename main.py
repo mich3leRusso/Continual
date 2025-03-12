@@ -60,9 +60,9 @@ def main():
         raise ValueError("Model not found.")
 
     if args.load_model_from_run:
-        model.load_state_dict(torch.load(f"logs/{args.load_model_from_run}/checkpoints/weights.pt"))
+        model.load_state_dict(torch.load(f"logs/{args.load_model_from_run}/checkpoints/weights10.pt"))
         # load bn weights as pkles 
-        bn_weights = pkl.load(open(f"logs/{args.load_model_from_run}/checkpoints/bn_weights.pkl", "rb"))    
+        bn_weights = pkl.load(open(f"logs/{args.load_model_from_run}/checkpoints/bn10_weights.pkl", "rb"))
         model.bn_weights = bn_weights
 
 
@@ -157,10 +157,10 @@ def main():
 
     if args.load_model_from_run:
         print("sta entrando qua???")
-        strategy.pruner.masks = torch.load(f"logs/{args.load_model_from_run}/checkpoints/masks.pt")
+        strategy.pruner.masks = torch.load(f"logs/{args.load_model_from_run}/checkpoints/masks10.pt")
 
     #indicizza per task
-    for i, train_taskset in enumerate(strategy.train_scenario):
+    for i, train_taskset in enumerate( strategy.train_scenario):
         if args.packnet_original:
             with torch.no_grad():
                 strategy.pruner.dezero(strategy.model)
@@ -256,11 +256,13 @@ def main():
             total_acc = 0
             task_acc = 0
             accuracy_e = 0
+        for idx, temperature in enumerate(args.temperature):
 
             if sanity_check:
-                confusion_mat = test_robustness_OOD(strategy, strategy.test_scenario[:11], i, sanity_check)
-            #total_acc, task_acc, accuracy_e, accuracy_taw = test_onering(strategy, strategy.test_scenario[:i + 1]) #(to be tested and debugged )
-            total_acc, task_acc, accuracy_e, accuracy_taw = test(strategy, strategy.test_scenario[:i + 1])
+                confusion_mat = test_robustness_OOD(strategy, strategy.test_scenario[:11], i, temperature, sanity_check, )
+
+            #total_acc, task_acc, accuracy_taw = test_onering(strategy, strategy.test_scenario[:i + 1]) #(to be tested and debugged )
+            total_acc, task_acc, accuracy_e, accuracy_taw = test(strategy, strategy.test_scenario[:i + 1], temperature)
 
 
 
@@ -271,13 +273,13 @@ def main():
                 f.write(f"{strategy.experience_idx},{accuracy_taw:.4f}\n")
 
         # save the model and the masks
-        save_model=True
+        save_model=False
 
         if not save_model:
             print("SAVING THE MODEL")
-            torch.save(strategy.model.state_dict(), f"logs/{args.run_name}/checkpoints/weights.pt")
-            torch.save(strategy.pruner.masks, f"logs/{args.run_name}/checkpoints/masks.pt")
-            pkl.dump(strategy.model.bn_weights, open(f"logs/{args.run_name}/checkpoints/bn_weights.pkl", "wb"))
+            torch.save(strategy.model.state_dict(), f"logs/{args.run_name}/checkpoints/weights10.pt")
+            torch.save(strategy.pruner.masks, f"logs/{args.run_name}/checkpoints/masks10.pt")
+            pkl.dump(strategy.model.bn_weights, open(f"logs/{args.run_name}/checkpoints/bn10_weights.pkl", "wb"))
 
     # push results to excel
     #unpublished = True
