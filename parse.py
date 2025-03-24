@@ -18,6 +18,7 @@ def get_args():
     parser.add_argument("--cuda", type=int, default=0, help="Select zero-indexed cuda device. -1 to use CPU.")
 
     parser.add_argument('--temperature', nargs='+', type=float, help="List of floating-point numbers")
+    parser.add_argument('--number_perturbations', nargs='+', type=int, help="List of integers numbers")
     parser.add_argument("--seed", type=int, default=0)
 
     parser.add_argument("--num_workers", type=int, default=4)

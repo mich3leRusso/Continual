@@ -11,7 +11,7 @@ from copy import deepcopy
 from utils.generic import freeze_model, set_seed, setup_logger
 from utils.publisher import push_results
 from utils.transforms import to_tensor_and_normalize, default_transforms,default_transforms_core50,\
-    to_tensor_and_normalize_core50,default_transforms_TinyImageNet,to_tensor_and_normalize_TinyImageNet, default_transforms_Synbols,to_tensor_and_normalize_Synbols
+    to_tensor_and_normalize_core50,default_transforms_TinyImageNet,to_tensor_and_normalize_TinyImageNet, default_transforms_Synbols,to_tensor_and_normalize_Synbols, to_tensor
 from torchvision.datasets import CIFAR100
 from torch.utils.data import DataLoader
 from continuum import ClassIncremental
@@ -77,9 +77,7 @@ def main():
         class_order = list(range(100))
 
         random.shuffle(class_order)
-        target_transform=transforms.Compose([transforms.ToTensor,
-                                             transforms.RandomErasing(p=1.0, scale=(0.02, 0.2), ratio=(0.3, 3.3), value=0)
-                                             ])
+
                                                     #creare un dataset
         train_dataset = CIFAR100(data_path, download=False, train=True)
         test_dataset = CIFAR100(data_path, download=False, train=False)
@@ -94,7 +92,7 @@ def main():
             test_dataset,
             increment=args.classes_per_exp,
             class_order=class_order,
-            transformations=to_tensor_and_normalize)
+            transformations=to_tensor)
 
     elif 'CORE50' in args.dataset :
         print("dataset core 50 in creazione")
@@ -156,7 +154,7 @@ def main():
     print(f"Number of tasks: {strategy.train_scenario.nb_tasks}.")
 
     if args.load_model_from_run:
-        print("sta entrando qua???")
+
         strategy.pruner.masks = torch.load(f"logs/{args.load_model_from_run}/checkpoints/masks10.pt")
 
     #indicizza per task
@@ -258,11 +256,13 @@ def main():
             accuracy_e = 0
         for idx, temperature in enumerate(args.temperature):
 
-            if sanity_check:
-                confusion_mat = test_robustness_OOD(strategy, strategy.test_scenario[:11], i, temperature, sanity_check, )
+            for n_pert in args.number_perturbations:
+
+                if sanity_check:
+                    confusion_mat = test_robustness_OOD(strategy, strategy.test_scenario[:11], i, temperature, sanity_check)
 
             #total_acc, task_acc, accuracy_taw = test_onering(strategy, strategy.test_scenario[:i + 1]) #(to be tested and debugged )
-            total_acc, task_acc, accuracy_e, accuracy_taw = test(strategy, strategy.test_scenario[:i + 1], temperature)
+                total_acc, task_acc, accuracy_e, accuracy_taw = test(strategy, strategy.test_scenario[:i + 1], temperature, n_pert)
 
 
 
@@ -273,7 +273,7 @@ def main():
                 f.write(f"{strategy.experience_idx},{accuracy_taw:.4f}\n")
 
         # save the model and the masks
-        save_model=False
+        save_model=True
 
         if not save_model:
             print("SAVING THE MODEL")

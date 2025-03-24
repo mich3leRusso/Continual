@@ -1,6 +1,5 @@
 import torchvision.transforms as transforms
 
-
 default_transforms = [
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
@@ -30,6 +29,11 @@ custom_transforms = [
         transforms.Normalize(
             (0.5071, 0.4865, 0.4409), (0.2673, 0.2564, 0.2762)
         ),
+    ]
+
+to_tensor = [
+        transforms.ToTensor(),
+
     ]
 
 to_tensor_and_normalize = [

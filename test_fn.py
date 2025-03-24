@@ -9,7 +9,7 @@ from torchvision import transforms
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from utils.transforms import expansion_transforms
+from utils.transforms import expansion_transforms, to_tensor_and_normalize
 import os
 def get_stat_exp(y,y_hats,exp_idx, task_id,task_predictions):
     """ Compute accuracy and task accuracy for each experience."""
@@ -187,9 +187,13 @@ def apply_transforms_and_permute(batch, num_permutations):
     batch_size, channels, height, width = batch.shape
     permuted_images = []
 
+    trans = transforms.Normalize(
+            (0.5071, 0.4865, 0.4409), (0.2673, 0.2564, 0.2762)
+        )
+
     for img in batch:
         #keep the original image
-        permuted_images.append(img)
+        permuted_images.append(trans(img))
         for _ in range(num_permutations-1):
             transformed_img = expansion_transforms(img)  # Apply transformations to tensor
 
@@ -282,7 +286,7 @@ def position( probs, entropies,  temperature, th=0.20 ):
 
 
 
-def test(strategy, test_set, temperature, plot=True, ):
+def test(strategy, test_set, temperature, n_perturb, plot=True):
     strategy.model.eval()
     dataloader = DataLoader(test_set, batch_size=1000, shuffle=False, num_workers=8)
 
@@ -298,7 +302,7 @@ def test(strategy, test_set, temperature, plot=True, ):
     task_predictions = []
     task_ids = []
     y_hats_th=[]
-    permutations = False
+    permutations = True
     check_entropy_th=False
 
     for i, (x, y, task_id) in enumerate(dataloader):
@@ -316,7 +320,8 @@ def test(strategy, test_set, temperature, plot=True, ):
 
             #new Permutations
             if permutations:
-                pred=process_permuted_images(x, model, 5, j)
+
+                pred=process_permuted_images(x, model, n_perturb, j)
             else:
 
                 pred = model(x.to(args.device))
@@ -332,8 +337,9 @@ def test(strategy, test_set, temperature, plot=True, ):
             #mute the unk_classes
             probs=torch.softmax(pred /temperature, dim=1)
             #print(probs.shape)
+
             if permutations:
-                probs= probs.view(batch_size, 5, 11)
+                probs= probs.view(batch_size, n_perturb, 11)
 
                 probs = probs.mean(dim=1)  # Shape: (batch_size, output_dim)
             #print(probs.size)
