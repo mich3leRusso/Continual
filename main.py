@@ -32,6 +32,7 @@ from test_fn import test_robustness_OOD
 
 def main():
 
+
     data_path = "/archive/HPCLab_exchange/4Mor"
 
 
@@ -92,7 +93,7 @@ def main():
             test_dataset,
             increment=args.classes_per_exp,
             class_order=class_order,
-            transformations=to_tensor)
+            transformations=to_tensor) #modificare l'expansion
 
     elif 'CORE50' in args.dataset :
         print("dataset core 50 in creazione")
@@ -129,7 +130,7 @@ def main():
         strategy.test_scenario = ClassIncremental(
             test_dataset,
             increment=args.n_classes//args.n_experiences,
-            transformations=to_tensor_and_normalize_TinyImageNet)
+            transformations=to_tensor)
 
     elif args.dataset == 'Synbols':
 

@@ -31,6 +31,7 @@ class tinyImageNetDataset(Dataset):
         self.transform = transform
 
         self.classes, self.class_to_idx = find_classes(self.data_path+'train/')
+
         self._set_data_and_labels()
 
         
@@ -55,10 +56,11 @@ class tinyImageNetDataset(Dataset):
         labels = []
         for path in paths:
             if 'train' in path:
-                class_current = path.split('_')[0].split('/')[-1]
+                class_current = path.split('_')[1].split('/')[-1]
             else:
                 class_current = path.split('/')[-2]
-            
+
+
             labels.append(self.class_to_idx[class_current])
         return labels
     

@@ -73,6 +73,17 @@ default_transforms_TinyImageNet = [
         ),
     ]
 
+expansion_transforms_tiny= transforms.Compose([
+
+    transforms.RandomCrop(64, padding=8),
+    transforms.RandomHorizontalFlip(),
+    transforms.ColorJitter(brightness=63 / 255),
+    transforms.Normalize(
+            (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
+        ),
+
+])
+
 to_tensor_and_normalize_TinyImageNet = [
         transforms.ToTensor(),
         transforms.Normalize(

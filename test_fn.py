@@ -9,8 +9,9 @@ from torchvision import transforms
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from utils.transforms import expansion_transforms, to_tensor_and_normalize
+from utils.transforms import expansion_transforms, to_tensor_and_normalize, expansion_transforms_tiny
 import os
+
 def get_stat_exp(y,y_hats,exp_idx, task_id,task_predictions):
     """ Compute accuracy and task accuracy for each experience."""
     conf_mat = torch.zeros((exp_idx+1, exp_idx+1))
@@ -195,7 +196,10 @@ def apply_transforms_and_permute(batch, num_permutations):
         #keep the original image
         permuted_images.append(trans(img))
         for _ in range(num_permutations-1):
-            transformed_img = expansion_transforms(img)  # Apply transformations to tensor
+            if args.dataset == "TinyImageNet":
+                transformed_img = expansion_transforms_tiny(img)
+            elif args.dataset == "CIFAR100":
+                transformed_img = expansion_transforms(img)  # Apply transformations to tensor
 
             permuted_images.append(transformed_img)
 
@@ -339,7 +343,7 @@ def test(strategy, test_set, temperature, n_perturb, plot=True):
             #print(probs.shape)
 
             if permutations:
-                probs= probs.view(batch_size, n_perturb, 11)
+                probs= probs.view(batch_size, n_perturb, args.classes_per_exp+1)#modificare l'ultima
 
                 probs = probs.mean(dim=1)  # Shape: (batch_size, output_dim)
             #print(probs.size)

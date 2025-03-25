@@ -61,9 +61,11 @@ class MIND():
         #eliminate one element for the one ring
         p = [(i, j.item()) for i, j in enumerate(self.mb_y)]
 
+        n_exp=args.n_classes/args.classes_per_exp
+
         outs_ = torch.cat(
             [torch.cat((self.mb_output[i][0:j], self.mb_output[i][j + 1:])) for i, j in p]
-        ).view(self.mb_output.shape[0], 109)
+        ).view(self.mb_output.shape[0], args.n_classes+n_exp-1)#automatizzare qua
 
 
         #print(self.mb_output[:,100])
@@ -189,7 +191,7 @@ class MIND():
             self.mb_output = self.fresh_model.forward(self.mb_x.to(args.device))
 
 
-            if self.epoch>50:
+            if self.epoch>100:
 
 
 
@@ -254,7 +256,7 @@ class MIND():
                 elif args.distill_loss == 'L2':
                     self.loss_distill = args.distill_beta*self.get_distill_loss_L2()
                 
-            if self.epoch>=40:
+            if self.epoch>=args.sweep:
 
                 self.loss_ce_onering = self.get_one_ring_loss()
                 self.loss_distill=0.0

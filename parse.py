@@ -20,6 +20,7 @@ def get_args():
     parser.add_argument('--temperature', nargs='+', type=float, help="List of floating-point numbers")
     parser.add_argument('--number_perturbations', nargs='+', type=int, help="List of integers numbers")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--sweep", type=int, default=100)
 
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--val_split", type=float, default=0.0)
