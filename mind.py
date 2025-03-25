@@ -61,7 +61,7 @@ class MIND():
         #eliminate one element for the one ring
         p = [(i, j.item()) for i, j in enumerate(self.mb_y)]
 
-        n_exp=args.n_classes/args.classes_per_exp
+        n_exp=int(args.n_classes/args.classes_per_exp)
 
         outs_ = torch.cat(
             [torch.cat((self.mb_output[i][0:j], self.mb_output[i][j + 1:])) for i, j in p]

@@ -257,13 +257,18 @@ def main():
             accuracy_e = 0
         for idx, temperature in enumerate(args.temperature):
 
-            for n_pert in args.number_perturbations:
+            if args.number_perturbations is not None:
+                for n_pert in args.number_perturbations:
 
-                if sanity_check:
-                    confusion_mat = test_robustness_OOD(strategy, strategy.test_scenario[:11], i, temperature, sanity_check)
+                    if sanity_check:
+                        confusion_mat = test_robustness_OOD(strategy, strategy.test_scenario[:11], i, temperature, sanity_check)
 
-            #total_acc, task_acc, accuracy_taw = test_onering(strategy, strategy.test_scenario[:i + 1]) #(to be tested and debugged )
-                total_acc, task_acc, accuracy_e, accuracy_taw = test(strategy, strategy.test_scenario[:i + 1], temperature, n_pert)
+                #total_acc, task_acc, accuracy_taw = test_onering(strategy, strategy.test_scenario[:i + 1]) #(to be tested and debugged )
+                    total_acc, task_acc, accuracy_e, accuracy_taw = test(strategy, strategy.test_scenario[:i + 1], temperature, n_pert)
+            else:
+                total_acc, task_acc, accuracy_e, accuracy_taw = test(strategy, strategy.test_scenario[:i + 1],
+                                                                     temperature, 0)
+
 
 
 
@@ -274,7 +279,7 @@ def main():
                 f.write(f"{strategy.experience_idx},{accuracy_taw:.4f}\n")
 
         # save the model and the masks
-        save_model=True
+        save_model=False
 
         if not save_model:
             print("SAVING THE MODEL")

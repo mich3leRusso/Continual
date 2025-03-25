@@ -306,7 +306,6 @@ def test(strategy, test_set, temperature, n_perturb, plot=True):
     task_predictions = []
     task_ids = []
     y_hats_th=[]
-    permutations = True
     check_entropy_th=False
 
     for i, (x, y, task_id) in enumerate(dataloader):
@@ -323,7 +322,7 @@ def test(strategy, test_set, temperature, n_perturb, plot=True):
             model.exp_idx = j
 
             #new Permutations
-            if permutations:
+            if n_perturb!=0:
 
                 pred=process_permuted_images(x, model, n_perturb, j)
             else:
@@ -342,10 +341,11 @@ def test(strategy, test_set, temperature, n_perturb, plot=True):
             probs=torch.softmax(pred /temperature, dim=1)
             #print(probs.shape)
 
-            if permutations:
+            if n_perturb!=0:
                 probs= probs.view(batch_size, n_perturb, args.classes_per_exp+1)#modificare l'ultima
 
                 probs = probs.mean(dim=1)  # Shape: (batch_size, output_dim)
+
             #print(probs.size)
             #input("check")
             frag_preds.append(probs[:, :-1])
