@@ -135,7 +135,7 @@ class MIND():
 
             self.epoch = epoch
 
-            if epoch ==40 and not self.distillation:
+            if epoch ==args.sweep and  self.distillation:
                 print(" START ONE RING TRAINING")
 
             if not self.distillation:
