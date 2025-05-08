@@ -1,9 +1,23 @@
 #!/bin/bash
 
+#PBS -N tiny_CSIx4
+#PBS -o continual_2.txt
+#PBS -q gpu
+#PBS -e continual_2.txt
+#PBS -k oe
+#PBS -m e
+#PBS -M davide.mor@leonardo.com
+#PBS -l select=1:ngpus=1:ncpus=12,walltime=240:00:00
+
+# Add conda to source
+source /archive/apps/miniconda/miniconda3/py312_2/etc/profile.d/conda.sh
+# Conda activate
+conda activate env_9
+
 # Experiments Table 1 (A) - TinyImageNet
 for seed in 0 1 2 3 4 5 6 7 8 9;
 do
-    python main.py --run_name "tinyimgnet_experiment" \
+    python /davinci-1/home/dmor/PycharmProjects/MIND/main_2.py --run_name "tiny_CSIx4" \
             --dataset "TinyImageNet" \
             --cuda 0 \
             --seed $seed \
@@ -15,5 +29,10 @@ do
             --epochs_distillation 120 \
             --lr_distillation 0.035 \
             --scheduler_distillation 80 110 \
-            --temperature 12
+            --temperature 12 \
+            --mode 4 \
+            --extra_classes 60 \
+            --aug_inf 0 \
+            --num_aug 0 \
+            --dropout 0.0
 done

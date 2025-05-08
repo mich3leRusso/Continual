@@ -12,17 +12,24 @@ class Core50Dataset(Dataset):
     """ Scenario Dataset for Core50 it requires a scenario number  """
     
     def __init__(self, data_path, object_n, transform=None):
-        self.data_path = data_path+'/core50_64x64/'
+        self.data_path = data_path#+'/core50_128x128/'
         self.transform = transform
         self.object_n = object_n+1
         self._set_data_and_labels()
 
     def _set_data_and_labels(self):
         """ Retrieve all paths and labels and shuffle them"""
+        #print('ok')
+        #print(self.data_path)
+        #print(self.object_n)
 
-        # Retrieve all paths of the specified shenario
+        # Retrieve all paths of the specified scenario
+        self.data_path = self.data_path.replace("128x128", "64x64")
         self.paths = glob.glob(self.data_path+'/*/'+f'o{self.object_n}/*.png')
         self.labels = self._extract_labels_from_paths(self.paths)
+
+        #print(self.paths)
+        #print(self.labels)
         
         # Shuffle the lists in unison
         combined = list(zip(self.paths, self.labels))

@@ -19,6 +19,12 @@ def get_args():
     parser.add_argument("--temperature", type=float, default=6.5)
 
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--mode", type=int, default=0)
+    parser.add_argument("--contrastive", type=int, default=0)
+    parser.add_argument("--extra_classes", type=int, default=10)
+    parser.add_argument("--aug_inf", type=int, default=0)
+    parser.add_argument("--num_aug", type=int, default=0)
+    parser.add_argument("--p", type=float, default=1.0)
 
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--val_split", type=float, default=0.0)
@@ -39,7 +45,7 @@ def get_args():
     parser.add_argument("--distill_beta", type=float, default=5)
     parser.add_argument("--scheduler_distillation", type=int, nargs='+', default=[40,60])
     parser.add_argument("--details", type=str, nargs ='+', default="baseline cifar100")
-    parser.add_argument("--dropout", type=float, default=0.,help="Select prob of dropout")
+    parser.add_argument("--dropout", type=float, default=0.1,help="Select prob of dropout")
     parser.add_argument("--self_distillation", action ="store_true")
     parser.add_argument("--packnet_original", action ="store_true")
     parser.add_argument("--no_bn", action ="store_true")

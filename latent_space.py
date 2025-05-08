@@ -299,19 +299,19 @@ for ss in range(0,1):
                             img = x[k]
                             img_ = [transforms.Normalize((0.5071, 0.4865, 0.4409), (0.2673, 0.2564, 0.2762))(
                                 torch.tensor(img).clone())]
-                            for p in range(1):
-                                img_.append(default_transforms_2(img.clone()))
+                            '''for p in range(1):
+                                img_.append(default_transforms_2(img.clone()))'''
                             img_ = torch.stack(img_)
                             out = model(img_.to(args.device))
-                            dist = torch.norm(out[1:] - out[0], dim=1)
+                            '''dist = torch.norm(out[1:] - out[0], dim=1)
                             if samples[y[k]]<250:
                                 scores[y[k]] += dist.mean().item()
                                 samples[y[k]] += 1
                             else:
                                 scores_2[y[k]] += dist.mean().item()
-                                samples[y[k]] += 1
+                                samples[y[k]] += 1'''
 
-                result = [x / y for x, y in zip(scores, samples)]
+                '''result = [x / y for x, y in zip(scores, samples)]
                 result_2 = [x / y for x, y in zip(scores_2, samples)]
 
                 for i in range(100):
@@ -319,7 +319,7 @@ for ss in range(0,1):
                     print(result_2[i] / sum(result_2))
                     print('\n')
                     matrix[i][j] = result[i]/sum(result)
-                    matrix_2[i][j] = result_2[i] / sum(result_2)
+                    matrix_2[i][j] = result_2[i] / sum(result_2)'''
 
             fig, axs = plt.subplots(1, 2, figsize=(10, 5))
 
@@ -332,8 +332,6 @@ for ss in range(0,1):
             axs[1].axis('off')
             plt.show()
 
-
-            '''
             y=torch.tensor(y)
 
             hist_1.append(out)
@@ -359,15 +357,15 @@ for ss in range(0,1):
             plt.scatter(X_2d[:, 0], X_2d[:, 1], c=labels.cpu().numpy()[:], cmap='tab10', alpha=0.7, marker='o')
             plt.title("Classi Originali")
             plt.xlabel("Dimensione 1")
-            plt.ylabel("Dimensione 2")'''
+            plt.ylabel("Dimensione 2")
 
-            '''# Secondo grafico per labels >= 10
+            # Secondo grafico per labels >= 10
             plt.subplot(1, 2, 2)
             mask = labels >= 10
             plt.scatter(X_2d[mask, 0], X_2d[mask, 1], c=labels.cpu().numpy()[mask], cmap='tab10', alpha=0.7, marker='o')
             plt.title("Classi ruotate")
             plt.xlabel("Dimensione 1")
-            plt.ylabel("Dimensione 2")'''
+            plt.ylabel("Dimensione 2")
 
-            '''plt.tight_layout()
-            plt.show()'''
+            plt.tight_layout()
+            plt.show()

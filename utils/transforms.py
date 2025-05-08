@@ -26,12 +26,18 @@ custom_transforms = [
         ),
     ]
 
+
 to_tensor_and_normalize = [
         transforms.ToTensor(),
         transforms.Normalize(
             (0.5071, 0.4865, 0.4409), (0.2673, 0.2564, 0.2762)
         ),
     ]
+
+to_tensor = [
+        transforms.ToTensor()
+    ]
+
 
 
 default_transforms_core50 = [

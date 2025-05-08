@@ -38,7 +38,7 @@ class tinyImageNetDataset(Dataset):
     def _set_data_and_labels(self):
         """ Retrieve all paths and labels and shuffle them"""
 
-        # Retrieve all paths of the specified shenario
+        # Retrieve all paths of the specified scenario
         self.paths_train = glob.glob(self.data_path+'train/*/images/*.JPEG')
         self.labels_train = self._extract_labels_from_paths(self.paths_train)
 
@@ -55,7 +55,7 @@ class tinyImageNetDataset(Dataset):
         labels = []
         for path in paths:
             if 'train' in path:
-                class_current = path.split('_')[0].split('/')[-1]
+                class_current = path.split('_')[1].split('/')[-1]
             else:
                 class_current = path.split('/')[-2]
             

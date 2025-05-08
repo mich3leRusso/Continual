@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#PBS -N plot_core50_CSIx3_ruotato
+#PBS -N plot_cifar100_CSIx3_ruotato
 #PBS -o Odin_002-.txt
 #PBS -q gpu
 #PBS -e Odin_002-.txt
@@ -15,15 +15,15 @@ source /archive/apps/miniconda/miniconda3/py312_2/etc/profile.d/conda.sh
 conda activate env_9
 
 
-python /davinci-1/home/dmor/PycharmProjects/MIND/num_pert_2.py --run_name "tiny_CSIx3" \
-        --dataset "CORE50_CI" \
+python /davinci-1/home/dmor/PycharmProjects/MIND/num_pert_2.py --run_name "cifar100_CSIx3" \
+        --dataset "CIFAR100" \
         --cuda 0 \
         --seed 1 \
         --n_experiences 10 \
         --model "gresnet32" \
-        --temperature 3 \
+        --temperature 6.5 \
         --mode 4 \
-        --extra_classes 10 \
+        --extra_classes 20 \
         --aug_inf 1 \
         --num_aug 100 \
         --dropout 0.0

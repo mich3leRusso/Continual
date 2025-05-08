@@ -1,3 +1,4 @@
+from parse import args
 '''
 Reference:
 https://github.com/khurramjaved96/incremental-learning/blob/autoencoders/model/resnet32.py
@@ -28,7 +29,7 @@ class GatedLinear(torch.nn.Linear):
 
     def forward(self, input: Tensor) -> Tensor:
         self.mask = self.mask.to(self.weight.device)
-        return F.linear(input, self.weight*self.mask, self.bias)
+        return F.linear(input, self.weight * self.mask, self.bias)
         #return F.linear(input, self.weight*self.mask, torch.zeros_like(self.bias).to(self.weight.device))
     
 
@@ -98,10 +99,13 @@ class ResNetBasicblock(nn.Module):
 
     def forward(self, x):
         residual = x
-
+        #print(f"AAA requires gradient: {x.requires_grad}")
         basicblock = self.conv_a(x)
+        #print(f"BBB requires gradient: {basicblock.requires_grad}")
         basicblock = self.bn_a(basicblock)
+        #print(f"CCC requires gradient: {basicblock.requires_grad}")
         basicblock = F.relu(basicblock, inplace=True)
+        #print(f"DDD requires gradient: {basicblock.requires_grad}")
 
         basicblock = self.dropout(basicblock)
 
@@ -147,7 +151,10 @@ class GatedCifarResNet(nn.Module):
         #expansion = block.expansion
 
         self.out_dim = 64 * block.expansion
-        self.fc = GatedLinear(64*expansion, classes_out, bias=False)
+        if args.mode != 4:
+            self.fc = GatedLinear(64*expansion, classes_out, bias=False)
+        else:
+            self.fc = GatedLinear(64 * expansion, classes_out+args.extra_classes*args.n_experiences, bias=False)
         self.output_mask = {}
         self.exp_idx = -1
         self.bn_weights = {}
@@ -194,7 +201,11 @@ class GatedCifarResNet(nn.Module):
         #     'fmaps': [x_1, x_2, x_3],
         #     'features': features
         # }
-        return self.fc(features) * self.output_mask[self.exp_idx]
+
+        if args.contrastive == 0:
+            return self.fc(features) * self.output_mask[self.exp_idx]
+        else:
+            return self.fc(features) * self.output_mask[self.exp_idx], features
 
         
     def forward_fts(self, x):
@@ -223,7 +234,10 @@ class GatedCifarResNet(nn.Module):
     def set_output_mask(self, exp_idx, classes_in_this_exp):
         # set zero to all the output neurons that are not in this experience
         self.exp_idx = exp_idx
-        self.output_mask[exp_idx] = torch.nn.functional.one_hot( torch.tensor(classes_in_this_exp), num_classes=OPT.n_classes).sum(dim=0).float().to(OPT.device)           
+        if args.mode != 4:
+            self.output_mask[exp_idx] = torch.nn.functional.one_hot( torch.tensor(classes_in_this_exp), num_classes=OPT.n_classes).sum(dim=0).float().to(OPT.device)
+        else:
+            self.output_mask[exp_idx] = torch.nn.functional.one_hot(torch.tensor(classes_in_this_exp),num_classes=OPT.n_classes+args.extra_classes*args.n_experiences).sum(dim=0).float().to(OPT.device)
 
     def save_bn_params(self, task_id):
         """Save the BN weights of the model in a dict"""

@@ -9,7 +9,7 @@ acc = []
 acc_TAG = []
 
 path = '/davinci-1/home/dmor/'
-files = [f for f in os.listdir(path) if f.startswith('plot_core50_CSIx3_ruotato.o')]
+files = [f for f in os.listdir(path) if f.startswith('plot_tiny_CSIx2_ruotato.o')]
 print(files)
 nome_file = path + files[0]
 p=0

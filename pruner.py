@@ -84,7 +84,10 @@ class Pruner(object):
                 #if it is the last layer, assign to the mask only the weights connecting to the new classes
                 if module_idx == n_modules-2 and args.dataset != 'CORE50' and not args.self_distillation:
                     subset = torch.zeros_like(self.masks[module_idx])
-                    subset[experience_idx*args.classes_per_exp:(experience_idx+1)*args.classes_per_exp, :] = 1
+                    if args.mode == 4:
+                        subset[experience_idx * (args.classes_per_exp + args.extra_classes):(experience_idx + 1) * (args.classes_per_exp + args.extra_classes), :] = 1
+                    else:
+                        subset[experience_idx*args.classes_per_exp:(experience_idx+1)*args.classes_per_exp, :] = 1
                     #convert subset to bool
                     subset = subset.to(torch.bool)
                 else:
@@ -132,8 +135,7 @@ class Pruner(object):
                     if weight_sharing:
                         module.mask = torch.logical_and(layer_mask <= task_id, layer_mask != -1).to(module.weight.device)
                     else:
-                        module.mask = (layer_mask == task_id).to(torch.float32).to(module.weight.device) 
-
+                        module.mask = (layer_mask == task_id).to(torch.float32).to(module.weight.device)
                 else:
                     module.mask = torch.ones_like(module.mask).to(torch.float32).to(module.weight.device)
 

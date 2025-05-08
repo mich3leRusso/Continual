@@ -9,7 +9,7 @@ E = []
 exp = 0
 
 path = '/davinci-1/home/dmor/'
-files = [f for f in os.listdir(path) if f.startswith('contrastive_1.0.o')]
+files = [f for f in os.listdir(path) if f.startswith('cifar100_CSIx3.o')]
 print(files)
 nome_file = path + files[0]
 
