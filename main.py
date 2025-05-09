@@ -26,29 +26,9 @@ from continuum.datasets import InMemoryDataset
 from continuum.scenarios import ContinualScenario
 import numpy as np
 from time import time
-import torchvision.transforms as transforms
-import torchvision.transforms.functional as F
-
-if args.mode == 3:
-    class RandomRotate180:
-        def __call__(self, img):
-            if random.random() < 0.5:
-                return F.rotate(img, 180)
-            return img
-
-    default_transforms = [
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ColorJitter(brightness=63 / 255),
-            RandomRotate180(),
-            transforms.ToTensor(),
-            transforms.Normalize(
-                (0.5071, 0.4865, 0.4409), (0.2673, 0.2564, 0.2762)
-            ),
-        ]
 
 def main():
-    data_path = os.path.expanduser('/davinci-1/home/dmor/PycharmProjects/MIND/data_64x64')
+    data_path = os.path.expanduser('/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/data_64x64')
 
     # set seed
     set_seed(args.seed)
@@ -73,9 +53,9 @@ def main():
         raise ValueError("Model not found.")
 
     if args.load_model_from_run:
-        model.load_state_dict(torch.load(f"/davinci-1/home/dmor/PycharmProjects/MIND/logs/{args.load_model_from_run}/checkpoints/weights.pt"))
+        model.load_state_dict(torch.load(f"/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/logs/{args.load_model_from_run}/checkpoints/weights.pt"))
         # load bn weights as pkles 
-        bn_weights = pkl.load(open(f"/davinci-1/home/dmor/PycharmProjects/MIND/logs/{args.load_model_from_run}/checkpoints/bn_weights.pkl", "rb"))
+        bn_weights = pkl.load(open(f"/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/logs/{args.load_model_from_run}/checkpoints/bn_weights.pkl", "rb"))
         model.bn_weights = bn_weights
 
     model.to(args.device)
@@ -89,29 +69,31 @@ def main():
         train_dataset = CIFAR100(data_path, download=True, train=True)
         test_dataset = CIFAR100(data_path, download=True, train=False)
 
-        '''if args.mode == 3:
+        r = int(args.extra_classes / args.classes_per_exp)
+
+        if args.control == 1:
             # modifico i dati in se (train)
             new_y = []
             new_x = []
             old_x = train_dataset.get_data()[0]
             old_y = train_dataset.get_data()[1]
-            for i in range(len(old_y)):
-                new_y.append(old_y[i])
-                new_y.append(old_y[i])
-                new_x.append(old_x[i])
-                new_x.append(np.rot90(old_x[i], 2))
+            for k in range(r):
+                for i in range(len(old_y)):
+                    new_y.append(old_y[i])
+                    new_y.append(old_y[i])
+                    new_x.append(old_x[i])
+                    new_x.append(np.rot90(old_x[i], k+1))
             new_x = np.array(new_x)
             new_y = np.array(new_y)
-            train_dataset = InMemoryDataset(new_x, new_y)'''
+            train_dataset = InMemoryDataset(new_x, new_y)
 
-        if args.mode == 4:
+        if args.extra_classes > 0:
             # modifico il class order
             class_order_ = []
             for t in range(10):
-                for c in range(10):
-                    class_order_.append(class_order[t * 10 + c])
-                for c in range(10):
-                    class_order_.append(class_order[t * 10 + c] + 100)
+                for k in range(r+1):
+                    for c in range(10):
+                        class_order_.append(class_order[t * 10 + c]+100*k)
             class_order = class_order_
 
             # modifico i dati in se (train)
@@ -120,13 +102,9 @@ def main():
             old_x = train_dataset.get_data()[0]
             old_y = train_dataset.get_data()[1]
             for i in range(len(old_y)):
-                new_y.append(old_y[i])
-                new_y.append(old_y[i]+100)
-                new_x.append(old_x[i])
-                r = old_y[i] % 3
-                new_x.append(old_x[i][:, :, [(r+2)%3, (r+1)%3, r]])
-                #noise = np.random.normal(0, 10, old_x[i].shape).astype(np.float32)
-                #new_x.append(np.clip(noise+old_x[i], 0, 255))
+                for k in range(r+1):
+                    new_y.append(old_y[i]+100*k)
+                    new_x.append(np.rot90(old_x[i], k))
             new_x = np.array(new_x)
             new_y = np.array(new_y)
             train_dataset = InMemoryDataset(new_x, new_y)
@@ -156,25 +134,29 @@ def main():
 
             strategy.train_scenario = ClassIncremental(
                 train_dataset,
-                increment=args.classes_per_exp*2,
+                increment=args.classes_per_exp + args.extra_classes,
                 class_order=class_order,
                 transformations=default_transforms)
         else:
+            old_x = train_dataset.get_data()[0]
+            old_y = train_dataset.get_data()[1]
+            permutazione = sorted(range(len(old_y)), key=lambda i: old_y[i])
+            new_x = old_x[permutazione]
+            new_y = old_y[permutazione]
+            train_dataset = InMemoryDataset(new_x, new_y)
+
             strategy.train_scenario = ClassIncremental(
                 train_dataset,
                 increment=args.classes_per_exp,
                 class_order=class_order,
                 transformations=default_transforms)
 
-        if args.mode == 4:
+        if args.extra_classes > 0:
             inc = args.classes_per_exp + args.extra_classes
         else:
             inc = args.classes_per_exp
 
-        if args.aug_inf:
-            tra = to_tensor
-        else:
-            tra = to_tensor_and_normalize
+        tra = to_tensor_and_normalize
 
         strategy.test_scenario = ClassIncremental(
             test_dataset,
@@ -188,55 +170,283 @@ def main():
             transformations=to_tensor_and_normalize)
 
     elif 'CORE50' in args.dataset :
-        data_path = os.path.expanduser('/davinci-1/home/dmor/PycharmProjects/MIND/data_64x64/core50_128x128')
+        data_path = os.path.expanduser('/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/data_64x64/core50_128x128')
         if args.dataset == 'CORE50_CI':
             train_data, test_data = get_all_core50_data(data_path, args.n_experiences, split=0.8)
         else:
             train_data, test_data = get_all_core50_scenario(data_path, split=0.8)
-        
+
+        r = int(args.extra_classes / 5)
+
+        if args.extra_classes > 0:
+            new_x = []
+            new_y = []
+            new_z = []  # task di appartenenza
+
+            old_x = train_data[0]
+            old_y = train_data[1]
+            old_z = train_data[2]
+
+            for k in range(r + 1):
+                for i in range(old_x.shape[0]):
+                    new_x.append(np.rot90(old_x[i], k))
+                    new_y.append(old_y[i] + 50 * k)
+                    new_z.append(old_z[i])
+            new_x = np.array(new_x)
+            new_y = np.array(new_y)
+            new_z = np.array(new_z)
+
+            class_order = []
+            for i in range(args.n_experiences):
+                classes_in_task = np.unique(new_y[new_z == i])
+                for j in range(len(classes_in_task)):
+                    class_order.append(int(classes_in_task[j]))
+
+            train_data = (new_x, new_y)
+
+            new_x = []
+            new_y = []
+
+            old_x = test_data[0]
+            old_y = test_data[1]
+
+            for i in range(old_x.shape[0]):
+                new_x.append(old_x[i])
+                new_y.append(old_y[i])
+            for j in range(r):
+                for i in range(50):
+                    new_x.append(old_x[0])
+                    new_y.append(50 * (j + 1) + i)
+
+            new_x = np.array(new_x)
+            new_y = np.array(new_y)
+
+            test_data = (new_x, new_y)
+        else:
+            class_order = []
+            for i in range(50):
+                class_order.append(i)
+
         train_dataset = InMemoryDataset(*train_data)
         test_dataset = InMemoryDataset(*test_data)
 
-        strategy.train_scenario = ContinualScenario(
-            train_dataset,
-            transformations=default_transforms_core50)
+        ### qui manca tutto il blocco per gestire le rotazioni
 
-        strategy.test_scenario = ContinualScenario(
-            test_dataset,
-            transformations=to_tensor_and_normalize_core50)
+        if args.extra_classes > 0:
+            inc = args.n_classes//args.n_experiences + args.extra_classes
+        else:
+            inc = args.n_classes//args.n_experiences
 
-    elif args.dataset == 'TinyImageNet':
-        data_path = os.path.expanduser('/davinci-1/home/dmor/PycharmProjects/MIND/data_64x64')
-        train_data, test_data = get_all_tinyImageNet_data(data_path,args.n_experiences)
-
-        train_dataset = InMemoryDataset(*train_data)
-        test_dataset = InMemoryDataset(*test_data)
+        tra = to_tensor_and_normalize_core50
 
         strategy.train_scenario = ClassIncremental(
             train_dataset,
-            increment=args.n_classes//args.n_experiences,
-            transformations=default_transforms_TinyImageNet)
+            class_order=class_order,
+            increment=inc,
+            transformations=default_transforms_core50)
+
+        strategy.test_scenario = ClassIncremental(
+            test_dataset,
+            class_order=class_order,
+            increment=inc,
+            transformations=tra)
 
         strategy.test_scenario_2 = ClassIncremental(
             test_dataset,
-            increment=args.n_classes//args.n_experiences,
+            class_order=class_order,
+            increment=inc,
+            transformations=to_tensor_and_normalize_core50)
+
+    elif args.dataset == 'TinyImageNet':
+        data_path = os.path.expanduser('/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/data_64x64')
+        train_data, test_data = get_all_tinyImageNet_data(data_path,args.n_experiences)
+
+        r = int(args.extra_classes/20)
+
+        if args.extra_classes > 0:
+            new_x = []
+            new_y = []
+            new_z = []  #task di appartenenza
+
+            old_x = train_data[0]
+            old_y = train_data[1]
+            old_z = train_data[2]
+
+            for k in range(r + 1):
+                for i in range(old_x.shape[0]):
+                    new_x.append(np.rot90(old_x[i], k))
+                    new_y.append(old_y[i]+200*k)
+                    new_z.append(old_z[i])
+            new_x = np.array(new_x)
+            new_y = np.array(new_y)
+            new_z = np.array(new_z)
+
+            class_order = []
+            for i in range(args.n_experiences):
+                classes_in_task=np.unique(new_y[new_z==i])
+                for j in range(len(classes_in_task)):
+                    class_order.append(int(classes_in_task[j]))
+
+            train_data = (new_x, new_y)
+
+            new_x = []
+            new_y = []
+
+            old_x = test_data[0]
+            old_y = test_data[1]
+
+            for i in range(old_x.shape[0]):
+                new_x.append(old_x[i])
+                new_y.append(old_y[i])
+            for j in range(r):
+                for i in range(200):
+                    new_x.append(old_x[0])
+                    new_y.append(200*(j+1)+i)
+                    
+            new_x = np.array(new_x)
+            new_y = np.array(new_y)
+
+            test_data = (new_x, new_y)
+        else:
+            class_order=[]
+            for i in range(200):
+                class_order.append(i)
+
+        train_dataset = InMemoryDataset(*train_data)
+        test_dataset = InMemoryDataset(*test_data)
+
+        if args.extra_classes > 0:
+            inc = args.n_classes//args.n_experiences + args.extra_classes
+        else:
+            inc = args.n_classes//args.n_experiences
+
+        tra = to_tensor_and_normalize_TinyImageNet
+
+        strategy.train_scenario = ClassIncremental(
+            train_dataset,
+            class_order=class_order,
+            increment=inc,
+            transformations=default_transforms_TinyImageNet)
+
+        strategy.test_scenario = ClassIncremental(
+            test_dataset,
+            class_order=class_order,
+            increment=inc,
+            transformations=tra)
+
+        strategy.test_scenario_2 = ClassIncremental(
+            test_dataset,
+            class_order=class_order,
+            increment=inc,
             transformations=to_tensor_and_normalize_TinyImageNet)
 
     elif args.dataset == 'Synbols':
 
-        train_data, test_data = get_synbols_data(data_path, n_tasks=args.n_experiences)
-
+        train_data, test_data = get_synbols_data('/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/data_64x64', n_tasks=args.n_experiences)
         train_dataset = InMemoryDataset(*train_data)
         test_dataset = InMemoryDataset(*test_data)
 
-        strategy.train_scenario = ClassIncremental(
-            train_dataset,
-            increment=args.n_classes//args.n_experiences,
-            transformations=default_transforms_Synbols)
+        class_order = list(range(200))
+        random.shuffle(class_order)
+
+        r = int(args.extra_classes / args.classes_per_exp)
+
+        if args.control == 0:
+            # modifico i dati in se (train)
+            new_y = []
+            new_x = []
+            old_x = train_dataset.get_data()[0]
+            old_y = train_dataset.get_data()[1]
+            for k in range(r):
+                for i in range(len(old_y)):
+                    new_y.append(old_y[i])
+                    new_y.append(old_y[i])
+                    new_x.append(old_x[i])
+                    new_x.append(np.rot90(old_x[i], k + 1))
+            new_x = np.array(new_x)
+            new_y = np.array(new_y)
+            train_dataset = InMemoryDataset(new_x, new_y)
+
+        if args.extra_classes > 0:
+            # modifico il class order
+            class_order_ = []
+            for t in range(10):
+                for k in range(r + 1):
+                    for c in range(20):
+                        class_order_.append(class_order[t * 20 + c] + 200 * k)
+            class_order = class_order_
+
+            # modifico i dati in se (train)
+            new_y = []
+            new_x = []
+            old_x = train_dataset.get_data()[0]
+            old_y = train_dataset.get_data()[1]
+            for i in range(len(old_y)):
+                for k in range(r + 1):
+                    new_y.append(old_y[i] + 200 * k)
+                    new_x.append(np.rot90(old_x[i], k))
+            new_x = np.array(new_x)
+            new_y = np.array(new_y)
+            train_dataset = InMemoryDataset(new_x, new_y)
+
+            # modifico i dati in se (test)
+            new_y = []
+            new_x = []
+            old_x = test_dataset.get_data()[0]
+            old_y = test_dataset.get_data()[1]
+
+            #####################################################################
+            #                 ATTENZIONE! Problema da risolvere                 #
+            #####################################################################
+            for i in range(args.n_experiences * args.extra_classes):
+                new_y.append(200 + i)
+                new_x.append(old_x[0])
+            #####################################################################
+
+            for i in range(len(old_y)):
+                new_y.append(old_y[i])
+                # new_y.append(old_y[i] + 100)
+                new_x.append(old_x[i])
+                # new_x.append(np.rot90(old_x[i], 2))
+            new_x = np.array(new_x)
+            new_y = np.array(new_y)
+            test_dataset = InMemoryDataset(new_x, new_y)
+
+            strategy.train_scenario = ClassIncremental(
+                train_dataset,
+                increment=args.classes_per_exp + args.extra_classes,
+                class_order=class_order,
+                transformations=default_transforms_Synbols)
+        else:
+            old_x = train_dataset.get_data()[0]
+            old_y = train_dataset.get_data()[1]
+            permutazione = sorted(range(len(old_y)), key=lambda i: old_y[i])
+            new_x = old_x[permutazione]
+            new_y = old_y[permutazione]
+            train_dataset = InMemoryDataset(new_x, new_y)
+
+            strategy.train_scenario = ClassIncremental(
+                train_dataset,
+                increment=args.classes_per_exp,
+                class_order=class_order,
+                transformations=default_transforms_Synbols)
+
+        if args.extra_classes > 0:
+            inc = args.classes_per_exp + args.extra_classes
+        else:
+            inc = args.classes_per_exp
+
+        tra = to_tensor_and_normalize_Synbols
 
         strategy.test_scenario = ClassIncremental(
             test_dataset,
-            increment=args.n_classes//args.n_experiences,
+            increment=inc,
+            class_order=class_order,
+            transformations=tra)
+        strategy.test_scenario_2 = ClassIncremental(
+            test_dataset,
+            increment=inc,
+            class_order=class_order,
             transformations=to_tensor_and_normalize_Synbols)
 
 
@@ -245,7 +455,7 @@ def main():
     print(f"Number of tasks: {strategy.train_scenario.nb_tasks}.")
 
     if args.load_model_from_run:
-        strategy.pruner.masks = torch.load(f"/davinci-1/home/dmor/PycharmProjects/MIND/logs/{args.load_model_from_run}/checkpoints/masks.pt")
+        strategy.pruner.masks = torch.load(f"/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/logs/{args.load_model_from_run}/checkpoints/masks.pt")
 
     for i, train_taskset in enumerate(strategy.train_scenario):
         if args.packnet_original:
@@ -259,7 +469,7 @@ def main():
 
         # prepare dataset
         strategy.train_taskset, strategy.val_taskset = split_train_val(train_taskset, val_split=args.val_split)
-        strategy.train_dataloader = DataLoader(strategy.train_taskset, batch_size=args.bsize, shuffle=True)
+        strategy.train_dataloader = DataLoader(strategy.train_taskset, batch_size=args.bsize, shuffle=False)
         if len(strategy.val_taskset):
             strategy.val_dataloader = DataLoader(strategy.val_taskset, batch_size=args.bsize, shuffle=True)
         else:
@@ -283,6 +493,7 @@ def main():
             strategy.pruner.set_gating_masks(strategy.fresh_model, strategy.experience_idx, weight_sharing=args.weight_sharing, distillation=strategy.distillation)
         
         strategy.fresh_model.to(args.device)
+        #print(train_taskset.get_classes())
         strategy.fresh_model.set_output_mask(i, train_taskset.get_classes())
 
         # instantiate oprimizer
@@ -319,13 +530,7 @@ def main():
             # write accuracy on the test set
             total_acc = 0
             task_acc = 0
-            accuracy_e = 0
-            if args.aug_inf:
-                for n_aug in range(args.num_aug):
-                    if (n_aug % 5) == 0:
-                        total_acc, task_acc, accuracy_e, accuracy_taw = test(strategy, strategy.test_scenario[:i + 1], n_aug)
-            else:
-                total_acc, task_acc, accuracy_e, accuracy_taw = test(strategy, strategy.test_scenario[:i+1], 0)
+            total_acc, task_acc, accuracy_taw = test(strategy, strategy.test_scenario[:i+1])
 
         #with open(f"/davinci-1/home/dmor/PycharmProjects/MIND/logs/{args.run_name}/results/total_acc.csv", "a") as f:
         #    f.write(f"{strategy.experience_idx},{total_acc:.4f}\n")
@@ -334,16 +539,16 @@ def main():
 
         # save the model and the masks
         if not args.load_model_from_run:
-            os.makedirs(os.path.dirname(f"/davinci-1/home/dmor/PycharmProjects/MIND/logs/{args.run_name}/checkpoints/weights.pt"), exist_ok=True)
-            torch.save(strategy.model.state_dict(), f"/davinci-1/home/dmor/PycharmProjects/MIND/logs/{args.run_name}/checkpoints/weights.pt")
-            torch.save(strategy.pruner.masks, f"/davinci-1/home/dmor/PycharmProjects/MIND/logs/{args.run_name}/checkpoints/masks.pt")
-            pkl.dump(strategy.model.bn_weights, open(f"/davinci-1/home/dmor/PycharmProjects/MIND/logs/{args.run_name}/checkpoints/bn_weights.pkl", "wb"))
+            os.makedirs(os.path.dirname(f"/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/logs/{args.run_name}/checkpoints/weights.pt"), exist_ok=True)
+            torch.save(strategy.model.state_dict(), f"/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/logs/{args.run_name}/checkpoints/weights.pt")
+            torch.save(strategy.pruner.masks, f"/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/logs/{args.run_name}/checkpoints/masks.pt")
+            pkl.dump(strategy.model.bn_weights, open(f"/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/logs/{args.run_name}/checkpoints/bn_weights.pkl", "wb"))
 
     # push results to excel
     #unpublished = True
     #while unpublished:
     #    try:
-    #        push_results(args, total_acc, task_acc, accuracy_e, accuracy_taw)
+    #        push_results(args, total_acc, task_acc, accuracy_taw)
     #        unpublished = False
     #    except:
     #        "Failed to push results, retrying in 1s"

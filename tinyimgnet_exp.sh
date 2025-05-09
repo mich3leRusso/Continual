@@ -17,7 +17,7 @@ conda activate env_9
 # Experiments Table 1 (A) - TinyImageNet
 for seed in 0 1 2 3 4 5 6 7 8 9;
 do
-    python /davinci-1/home/dmor/PycharmProjects/MIND/main_2.py --run_name "tiny_CSIx4" \
+    python /davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/main.py --run_name "tiny_CSIx4" \
             --dataset "TinyImageNet" \
             --cuda 0 \
             --seed $seed \
@@ -30,9 +30,6 @@ do
             --lr_distillation 0.035 \
             --scheduler_distillation 80 110 \
             --temperature 12 \
-            --mode 4 \
-            --extra_classes 60 \
-            --aug_inf 0 \
-            --num_aug 0 \
-            --dropout 0.0
+            --class_augmentation 60
+
 done

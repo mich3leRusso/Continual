@@ -43,9 +43,9 @@ class MIND():
         self.confusion_mat_task = torch.zeros((args.n_experiences, args.n_experiences))
         self.forgetting_mat = torch.zeros((args.n_experiences, args.n_experiences))
 
-    def get_ce_loss2(self):
+    '''def get_ce_loss2(self):
         out = self.mb_output[:, torch.nonzero(self.model.output_mask[self.experience_idx])].squeeze(-1)
-        return self.criterion(out, self.mb_y.to(args.device)-(self.experience_idx*10))
+        return self.criterion(out, self.mb_y.to(args.device)-(self.experience_idx*10))'''
 
 
     def get_ce_loss(self):
@@ -56,10 +56,7 @@ class MIND():
     def get_distill_loss_JS(self):
         """ Distillation loss. (jensen-shannon) """
         with torch.no_grad():
-            if args.contrastive==1:
-                old_y, features = self.distill_model.forward(self.mb_x)
-            else:
-                old_y = self.distill_model.forward(self.mb_x)
+            old_y = self.distill_model.forward(self.mb_x)
 
         new_y = self.mb_output
         soft_log_old = torch.nn.functional.log_softmax(old_y+10e-5, dim=1)
@@ -74,37 +71,6 @@ class MIND():
         dist = ((dist1+dist2)/2).mean()
 
         return dist
-
-    def get_distill_loss_KL(self):
-        """ KL divergence loss. """
-        with torch.no_grad():
-            old_y = self.distill_model.forward(self.mb_x)
-
-        new_y = self.mb_output
-        soft_log_old = torch.nn.functional.log_softmax(old_y+10e-5, dim=1)
-        soft_log_new = torch.nn.functional.log_softmax(new_y+10e-5, dim=1)
-
-        kl_div = torch.nn.functional.kl_div(soft_log_new+10e-5, soft_log_old+10e-5, reduction='batchmean', log_target=True)
-
-        return kl_div
-    def get_distill_loss_Cosine(self):
-        """ Cosine distance loss. """
-        with torch.no_grad():
-            old_y = self.distill_model.forward(self.mb_x)
-        new_y = self.mb_output
-        cosine_sim = F.cosine_similarity(new_y, old_y, dim=1)
-
-        return 1 - cosine_sim.mean()
-    def get_distill_loss_L2(self):
-    
-        """ L2 distance loss. """
-        with torch.no_grad():
-            old_y = self.distill_model.forward(self.mb_x)
-
-        new_y = self.mb_output
-        l2_distance = F.pairwise_distance(new_y, old_y)
-
-        return l2_distance.mean()
 
 
     def train(self):
@@ -161,43 +127,10 @@ class MIND():
             self.loss_ce = torch.tensor(0.).to(args.device)
             self.loss_distill = torch.tensor(0.).to(args.device)
 
-            if args.contrastive==1:
-                self.mb_output, features = self.fresh_model.forward(self.mb_x.to(args.device))
-
-                #obtaining the grounf truth for contrastive learning
-                l = int(self.mb_y.shape[0]/2)
-                y_1 = self.mb_y[:l]
-                y_2 = self.mb_y[l:]
-                t_1 = self.mb_t[:l]
-                t_2 = self.mb_t[l:]
-
-                M1 = (t_1[:, None] == t_2[None, :]).to(torch.int)
-                M2 = ((y_1[:, None] - y_2[None, :]) % args.classes_per_exp == 0).int()
-                M3 = (y_1[:, None] == y_2[None, :]).to(torch.int)
-                mask = torch.logical_and(M1, M2)
-                targets = torch.logical_xor(mask, M3).to(args.device).to(torch.float)
-                mask = mask.to(args.device).to(torch.float)
-
-                #targets = (y_1[:, None] == y_2[None, :]).to(torch.float).to(args.device)
-
-                #computing distances
-                features = features/features.norm(p=2, dim=1, keepdim=True)
-                f_1 = features[:l]
-                f_2 = features[l:]
-                f = f_1 @ f_2.T
-                f = torch.sigmoid(f) #provare alternative diverse alla sigmoide
-
-                #computing loss
-                loss_fn = nn.BCEWithLogitsLoss()
-                self.loss_contrastive = loss_fn(f*mask, targets*mask)
-            else:
-                self.mb_output = self.fresh_model.forward(self.mb_x.to(args.device))
+            self.mb_output = self.fresh_model.forward(self.mb_x.to(args.device))
 
             self.loss_ce = self.get_ce_loss()
-            if args.contrastive==1:
-                self.loss += args.p*self.loss_contrastive + self.loss_ce + self.loss_distill
-            else:
-                self.loss += self.loss_ce + self.loss_distill
+            self.loss += self.loss_ce + self.loss_distill
             self.loss.backward()
 
             if self.plot_gradients and (len(self.train_dataloader)-2)==i and self.epoch == self.train_epochs-1:
@@ -234,55 +167,13 @@ class MIND():
             self.loss = torch.tensor(0.).to(args.device)
             self.loss_ce = torch.tensor(0.).to(args.device)
             self.loss_distill = torch.tensor(0.).to(args.device)
-
-            if args.contrastive==1:
-                self.mb_output, features = self.model.forward(self.mb_x.to(args.device))
-
-                #obtaining the grounf truth for contrastive learning
-                l = int(self.mb_y.shape[0]/2)
-                y_1 = self.mb_y[:l]
-                y_2 = self.mb_y[l:]
-                t_1 = self.mb_t[:l]
-                t_2 = self.mb_t[l:]
-
-                M1 = (t_1[:, None] == t_2[None, :]).to(torch.int)
-                M2 = ((y_1[:, None] - y_2[None, :]) % args.classes_per_exp == 0).int()
-                M3 = (y_1[:, None] == y_2[None, :]).to(torch.int)
-                mask = torch.logical_and(M1, M2)
-                targets = torch.logical_not(torch.logical_xor(mask, M3)).to(args.device).to(torch.float)
-                mask = mask.to(args.device).to(torch.float)
-
-
-                #targets = (y_1[:, None] == y_2[None, :]).to(torch.float).to(args.device)
-
-                #computing distances
-                features = features/features.norm(p=2, dim=1, keepdim=True)
-                f_1 = features[:l]
-                f_2 = features[l:]
-                f = f_1 @ f_2.T
-                f = torch.sigmoid(f) #provare alternative diverse alla sigmoide
-
-                #computing loss
-                loss_fn = nn.BCEWithLogitsLoss()
-                self.loss_contrastive = loss_fn(f*mask, targets*mask)
-            else:
-                self.mb_output = self.model.forward(self.mb_x.to(args.device))
+            self.mb_output = self.model.forward(self.mb_x.to(args.device))
 
             if args.distill_beta > 0:
-                if args.distill_loss == 'JS':
-                    self.loss_distill = args.distill_beta*self.get_distill_loss_JS()
-                elif args.distill_loss == 'KL':
-                    self.loss_distill = args.distill_beta*self.get_distill_loss_KL()
-                elif args.distill_loss == 'Cosine':
-                    self.loss_distill = args.distill_beta*self.get_distill_loss_Cosine()*10.
-                elif args.distill_loss == 'L2':
-                    self.loss_distill = args.distill_beta*self.get_distill_loss_L2()
+                self.loss_distill = args.distill_beta*self.get_distill_loss_JS()
 
             self.loss_ce = self.get_ce_loss()
-            if args.contrastive==1:
-                self.loss += args.p*self.loss_contrastive + self.loss_ce + self.loss_distill
-            else:
-                self.loss += self.loss_ce + self.loss_distill
+            self.loss += self.loss_ce + self.loss_distill
             self.loss.backward()
             
             if self.plot_gradients and (len(self.train_dataloader)-2)==i and self.epoch == self.train_epochs-1:

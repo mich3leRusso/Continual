@@ -57,7 +57,7 @@ elif args.model == 'gresnet18mlp':
 else:
     raise ValueError("Model not found.")
 
-data_path = os.path.expanduser('/davinci-1/home/dmor/PycharmProjects/MIND/data_64x64')
+data_path = os.path.expanduser('/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/data_64x64')
 
 # log files
 setup_logger()
@@ -68,8 +68,8 @@ for ss in range(10):
     set_seed(ss)
     file_name = args.run_name[:-2]+f"_{ss}"
     print(file_name)
-    model.load_state_dict(torch.load(f"/davinci-1/home/dmor/PycharmProjects/MIND/logs/{file_name}/checkpoints/weights.pt"))
-    bn_weights = pkl.load(open(f"/davinci-1/home/dmor/PycharmProjects/MIND/logs/{file_name}/checkpoints/bn_weights.pkl", "rb"))
+    model.load_state_dict(torch.load(f"/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/logs/{file_name}/checkpoints/weights.pt"))
+    bn_weights = pkl.load(open(f"/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/logs/{file_name}/checkpoints/bn_weights.pkl", "rb"))
     model.bn_weights = bn_weights
 
     model.to(args.device)
@@ -85,7 +85,7 @@ for ss in range(10):
 
         r = int(args.extra_classes / args.classes_per_exp)
 
-        if args.mode == 3:
+        if args.control == 1:
             # modifico i dati in se (train)
             new_y = []
             new_x = []
@@ -101,7 +101,7 @@ for ss in range(10):
             new_y = np.array(new_y)
             train_dataset = InMemoryDataset(new_x, new_y)
 
-        if args.mode == 4:
+        if args.extra_classes > 0:
             # modifico il class order
             class_order_ = []
             for t in range(10):
@@ -158,10 +158,7 @@ for ss in range(10):
                 class_order=class_order,
                 transformations=default_transforms)
 
-        if args.mode == 4:
-            inc = args.classes_per_exp + args.extra_classes
-        else:
-            inc = args.classes_per_exp
+        inc = args.classes_per_exp + args.extra_classes
 
         tra = to_tensor
 
@@ -177,12 +174,12 @@ for ss in range(10):
             transformations=to_tensor_and_normalize)
 
     elif args.dataset == 'TinyImageNet':
-        data_path = os.path.expanduser('/davinci-1/home/dmor/PycharmProjects/MIND/data_64x64')
+        data_path = os.path.expanduser('/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/data_64x64')
         train_data, test_data = get_all_tinyImageNet_data(data_path, args.n_experiences)
 
         r = int(args.extra_classes / 20)
 
-        if args.mode == 4:
+        if args.extra_classes > 0:
             new_x = []
             new_y = []
             new_z = []  # task di appartenenza
@@ -234,10 +231,7 @@ for ss in range(10):
         train_dataset = InMemoryDataset(*train_data)
         test_dataset = InMemoryDataset(*test_data)
 
-        if args.mode == 4:
-            inc = args.n_classes // args.n_experiences + args.extra_classes
-        else:
-            inc = args.n_classes // args.n_experiences
+        inc = args.n_classes // args.n_experiences + args.extra_classes
 
         tra = to_tensor
 
@@ -260,7 +254,7 @@ for ss in range(10):
             transformations=to_tensor_and_normalize_TinyImageNet)
 
     elif 'CORE50' in args.dataset :
-        data_path = os.path.expanduser('/davinci-1/home/dmor/PycharmProjects/MIND/data_64x64/core50_128x128')
+        data_path = os.path.expanduser('/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/data_64x64/core50_128x128')
         if args.dataset == 'CORE50_CI':
             train_data, test_data = get_all_core50_data(data_path, args.n_experiences, split=0.8)
         else:
@@ -268,7 +262,7 @@ for ss in range(10):
 
         r = int(args.extra_classes / 5)
 
-        if args.mode == 4:
+        if args.extra_classes > 0:
             new_x = []
             new_y = []
             new_z = []  # task di appartenenza
@@ -322,10 +316,7 @@ for ss in range(10):
 
         ### qui manca tutto il blocco per gestire le rotazioni
 
-        if args.mode == 4:
-            inc = args.n_classes//args.n_experiences + args.extra_classes
-        else:
-            inc = args.n_classes//args.n_experiences
+        inc = args.n_classes//args.n_experiences + args.extra_classes
 
         tra = to_tensor
 
@@ -358,7 +349,7 @@ for ss in range(10):
 
         r = int(args.extra_classes / args.classes_per_exp)
 
-        if args.mode == 3:
+        if args.control == 1:
             # modifico i dati in se (train)
             new_y = []
             new_x = []
@@ -374,7 +365,7 @@ for ss in range(10):
             new_y = np.array(new_y)
             train_dataset = InMemoryDataset(new_x, new_y)
 
-        if args.mode == 4:
+        if args.extra_classes > 0:
             # modifico il class order
             class_order_ = []
             for t in range(10):
@@ -438,10 +429,7 @@ for ss in range(10):
                 class_order=class_order,
                 transformations=default_transforms_Synbols)
 
-        if args.mode == 4:
-            inc = args.classes_per_exp + args.extra_classes
-        else:
-            inc = args.classes_per_exp
+        inc = args.classes_per_exp + args.extra_classes
 
         tra = to_tensor
 
@@ -459,7 +447,7 @@ for ss in range(10):
     print(f"Number of classes: {strategy.train_scenario.nb_classes}.")
     print(f"Number of tasks: {strategy.train_scenario.nb_tasks}.")
 
-    strategy.pruner.masks = torch.load(f"/davinci-1/home/dmor/PycharmProjects/MIND/logs/{file_name}/checkpoints/masks.pt")
+    strategy.pruner.masks = torch.load(f"/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/logs/{file_name}/checkpoints/masks.pt")
 
     for i, train_taskset in enumerate(strategy.train_scenario):
         if args.packnet_original:
@@ -501,7 +489,7 @@ for ss in range(10):
 
             hist_1 = []
             hist_2 = []
-            if args.mode != 4:
+            if args.extra_classes == 0:
                 num_rot = 1
             else:
                 num_rot = int(args.extra_classes/args.classes_per_exp)+1
@@ -513,7 +501,7 @@ for ss in range(10):
                 print(f"k = {k}")
                 rot = k % num_rot
 
-                if args.mode == 4:
+                if args.extra_classes > 0:
                     s = args.n_classes + int(args.extra_classes * args.n_experiences)
                     confusion_mat = torch.zeros((s, s))
                     confusion_mat_e = torch.zeros((s, s))
@@ -607,14 +595,14 @@ for ss in range(10):
                         #    pred = model(x.to(args.device))
 
 
-                        if args.mode == 4:
+                        if args.extra_classes > 0:
                             pred = pred[:, j * (args.classes_per_exp + args.extra_classes): (j + 1) * (
                                         args.classes_per_exp + args.extra_classes)]
                         else:
                             pred = pred[:, j * args.classes_per_exp:(j + 1) * args.classes_per_exp]
 
                         # nella modalità 4 abbiamo classi aggiuntive quindi rimuovo i relativi pezzi ####################
-                        if args.mode == 4:
+                        if args.extra_classes > 0:
                             sp = torch.softmax(pred / args.temperature, dim=1)
                             sp = sp[:, args.classes_per_exp*rot:args.classes_per_exp*(rot+1)]
                             frag_preds.append(torch.softmax(sp / args.temperature, dim=1))
@@ -667,7 +655,7 @@ for ss in range(10):
                         y_taw.append(frag_preds[task_id.to(torch.int32), indices].argmax(dim=-1))
 
                     else:
-                        if args.mode != 4:
+                        if args.extra_classes == 0:
                             y_hats_e.append(frag_preds[index_class, indices].argmax(dim=1) + args.classes_per_exp * index_class)
                             y_hats.append(frag_preds[buff[-1], indices].argmax(dim=1) + args.classes_per_exp * buff[-1])
                             y_taw.append(frag_preds[task_id.to(torch.int32), indices].argmax(dim=-1) + (
@@ -711,7 +699,7 @@ for ss in range(10):
                     confusion_mat_taw[y[i], y_taw[i]] += 1
 
                 # task confusion matrix and forgetting mat
-                if args.mode != 4:
+                if args.extra_classes == 0:
                     for j in range(strategy.experience_idx + 1):
                         i = strategy.experience_idx
                         acc_conf_mat_task = confusion_mat[j * args.classes_per_exp:(j + 1) * args.classes_per_exp,

@@ -59,31 +59,22 @@ def test(strategy, test_set, plot=True):
     strategy.model.eval()
     dataloader = DataLoader(test_set, batch_size=1000, shuffle=False, num_workers=8)
 
-    if args.mode == 4:
+    if args.extra_classes > 0:
         s = args.n_classes + int(args.extra_classes*args.n_experiences)
         confusion_mat = torch.zeros((s, s))
-        confusion_mat_e = torch.zeros((s, s))
         confusion_mat_taw = torch.zeros((s, s))
     else:
         confusion_mat = torch.zeros((args.n_classes, args.n_classes))
-        confusion_mat_e = torch.zeros((args.n_classes, args.n_classes))
         confusion_mat_taw = torch.zeros((args.n_classes, args.n_classes))
 
     y_hats = []
-    y_hats_e = []
     y_taw = []
     ys = []
     task_predictions = []
     task_ids = []
-    true_ = []
-    false_ = []
-    A_ = []
-    B_ = []
-    C_ = []
     for i, (x, y, task_id) in enumerate(dataloader):
         frag_preds = []
         frag_preds_2 = []
-        entropy_frag = []
         for j in range(strategy.experience_idx+1):
             # create a temporary model copy
             model = freeze_model(deepcopy(strategy.model))
@@ -92,83 +83,27 @@ def test(strategy, test_set, plot=True):
             model.load_bn_params(j)
             model.exp_idx = j
 
-            #se siamo nell'ultimo giro avvio la routine di aumentazione in fase di inferenza
-            if args.aug_inf & (strategy.experience_idx == 9):
-                if args.dataset == 'CIFAR100':
-                    trans = transforms.Compose([transforms.RandomCrop(32, padding=4), transforms.RandomHorizontalFlip(), transforms.ColorJitter(brightness=63 / 255), transforms.Normalize((0.5071, 0.4865, 0.4409), (0.2673, 0.2564, 0.2762))])
-                elif args.dataset == 'TinyImageNet':
-                    trans = transforms.Compose([transforms.RandomCrop(64, padding=8), transforms.RandomHorizontalFlip(), transforms.ColorJitter(brightness=63 / 255), transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
-                pred = []
-                for k in range(args.num_aug):
-                    x_ = []
-                    for img in x:
-                        x_.append(trans(img))
-                    x_2 = torch.stack(x_)
-                    pred.append(model(x_2.to(args.device)))
-                pred = torch.stack(pred, dim=1).mean(dim=1)
-            elif args.aug_inf:
-                if args.dataset == 'CIFAR100':
-                    trans = transforms.Compose([transforms.Normalize((0.5071, 0.4865, 0.4409), (0.2673, 0.2564, 0.2762))])
-                elif args.dataset == 'TinyImageNet':
-                    trans = transforms.Compose([transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
-                x_ = []
-                for img in x:
-                    x_.append(trans(img))
-                x_2 = torch.stack(x_)
-                pred=model(x_2.to(args.device))
-            else:
-                if args.contrastive==1:
-                    pred, _ = model(x.to(args.device))
-                else:
-                    pred = model(x.to(args.device))
+            pred = model(x.to(args.device))
 
             if not args.dataset == 'CORE50':
-                if args.mode == 4:
+                if args.extra_classes > 0:
                     pred = pred[:, j * (args.classes_per_exp + args.extra_classes): (j + 1) * (args.classes_per_exp + args.extra_classes)]
                 else:
                     pred = pred[:, j * args.classes_per_exp:(j + 1) * args.classes_per_exp]
 
             #nella modalità 4 abbiamo classi aggiuntive quindi rimuovo i relativi pezzi
-            if args.mode == 4:
+            if args.extra_classes > 0:
                 sp = torch.softmax(pred/args.temperature, dim=1)
                 sp = sp[:, :args.classes_per_exp]
                 frag_preds.append(torch.softmax(sp / args.temperature, dim=1))
             else:
                 frag_preds.append(torch.softmax(pred/args.temperature, dim=1))
                 frag_preds_2.append(pred)
-            entropy_frag.append(entropy(torch.softmax(pred/args.temperature, dim=1)))
 
         #on_shell_confidence, elsewhere_confidence = confidence(frag_preds, task_id)
         #print(f"on_shell confidence:{[round(c.item(), 2) for c in on_shell_confidence]}\nelsewhere confidence:{[round(c.item(), 2) for c in elsewhere_confidence]}")
 
         frag_preds = torch.stack(frag_preds)  # [n_frag, bsize, n_classes]
-        if (args.dataset=='CIFAR100') & (args.contrastive == 1):
-            all_values = torch.stack(frag_preds_2)
-
-            max_values = torch.max(frag_preds, dim=2)[0]
-
-            task = (y/args.classes_per_exp).to(torch.int)
-            y_id = (y%args.classes_per_exp).to(torch.int)
-
-            A = all_values[task, torch.arange(all_values.shape[1]), y_id]
-
-            mask = torch.zeros_like(all_values, dtype=torch.bool)
-            for i in range(task.shape[0]):
-                mask[task[i], i, :] = True
-                mask[task[i], i, y_id[i]] = False
-            B = all_values[mask]
-
-            mask = torch.ones_like(all_values, dtype=torch.bool)
-            for i in range(task.shape[0]):
-                mask[task[i], i, :] = False
-            C = all_values[mask]
-
-            true = max_values[task, torch.arange(max_values.shape[1])]
-            mask = torch.ones_like(max_values, dtype=torch.bool)
-            mask[task, torch.arange(max_values.shape[1])] = False
-            false = max_values[mask].reshape(max_values.shape[0] - 1, max_values.shape[1])
-
-        entropy_frag = torch.stack(entropy_frag)  # [bsize, n_frag]
 
         batch_size = frag_preds.shape[1]
 
@@ -179,37 +114,17 @@ def test(strategy, test_set, plot=True):
 
         # buff_entropy ->  2 x batch_size, entropy values
         indices = torch.arange(batch_size)
-        if buff.shape[0] == 1:
-            buff_entropy = entropy_frag[buff[0, :], indices].unsqueeze(0)
-        else:
-            a = entropy_frag[buff[0, :], indices]
-            b = entropy_frag[buff[1, :], indices]
-            buff_entropy = torch.stack((a, b)) # [2, bsize]
-
-        # index of min entropy ->  1 x batch_size, val 0-1
-        index_min = buff_entropy.argsort(dim=0)[0,:]
-
-        index_class = buff[index_min, indices]
 
         task_predictions.append(buff[-1])
         if args.dataset == 'CORE50':
             y_hats.append(frag_preds[buff[-1], indices].argmax(dim=1))
-            y_hats_e.append(frag_preds[index_class, indices].argmax(dim=1))
             y_taw.append(frag_preds[task_id.to(torch.int32), indices].argmax(dim=-1))
 
         else:
-            if (args.dataset == 'CIFAR100') & (args.contrastive == 1):
-                A_.append(A)
-                B_.append(B)
-                C_.append(C)
-                true_.append(true)
-                false_.append(false)
-            if args.mode != 4:
-                y_hats_e.append(frag_preds[index_class, indices].argmax(dim=1) + args.classes_per_exp*index_class)
+            if args.extra_classes == 0:
                 y_hats.append(frag_preds[buff[-1], indices].argmax(dim=1) + args.classes_per_exp*buff[-1])
                 y_taw.append(frag_preds[task_id.to(torch.int32), indices].argmax(dim=-1) + (args.classes_per_exp*task_id.to(args.cuda)).to(torch.int32))
             else:
-                y_hats_e.append(frag_preds[index_class, indices].argmax(dim=1) + (args.classes_per_exp + args.extra_classes) * index_class)
                 y_hats.append(frag_preds[buff[-1], indices].argmax(dim=1) + (args.classes_per_exp + args.extra_classes)*buff[-1])
                 y_taw.append(frag_preds[task_id.to(torch.int32), indices].argmax(dim=-1) + ((args.classes_per_exp + args.extra_classes)*task_id.to(args.cuda)).to(torch.int32))
 
@@ -218,75 +133,29 @@ def test(strategy, test_set, plot=True):
 
     # concat labels and preds
     y_hats = torch.cat(y_hats, dim=0).to('cpu')
-    y_hats_e = torch.cat(y_hats_e, dim=0).to('cpu')
+
     y = torch.cat(ys, dim=0).to('cpu')
     y_taw = torch.cat(y_taw, dim=0).to('cpu')
     task_predictions = torch.cat(task_predictions, dim=0).to('cpu')
     task_ids = torch.cat(task_ids, dim=0).to('cpu')
-    if (args.dataset == 'CIFAR100') & (args.contrastive == 1):
-        true = torch.cat(true_, dim=-1).to('cpu')[y == y_hats]
-        false = torch.cat(false_, dim=-1).to('cpu')[:, y == y_hats]
 
-        A = torch.cat(A_, dim=-1).to('cpu').flatten().numpy()
-        B = torch.cat(B_, dim=-1).to('cpu').flatten().numpy()
-        C = torch.cat(C_, dim=-1).to('cpu').flatten().numpy()
-
-        print(f"\nTrue: {np.mean(A)} ± {np.std(A)}")
-        print(f"False: {np.mean(B)} ± {np.std(B)}")
-        if len(C)!=0:
-            print(f"Out: {np.mean(C)} ± {np.std(C)}")
-        print('\n')
-
-        '''values = A.flatten().cpu().numpy()
-        plt.hist(values, bins=50, edgecolor='black')
-        plt.title('Istogramma')
-        plt.xlabel('Valore')
-        plt.ylabel('Frequenza')
-        plt.grid(True)
-        plt.show()
-
-        values = B.flatten().cpu().numpy()
-        plt.hist(values, bins=50, edgecolor='black')
-        plt.title('Istogramma')
-        plt.xlabel('Valore')
-        plt.ylabel('Frequenza')
-        plt.grid(True)
-        plt.show()
-
-        values = C.flatten().cpu().numpy()
-        plt.hist(values, bins=50, edgecolor='black')
-        plt.title('Istogramma')
-        plt.xlabel('Valore')
-        plt.ylabel('Frequenza')
-        plt.grid(True)
-        plt.show()'''
-
-        values = true.flatten().cpu().numpy()
-        plt.hist(values, bins=50, range=(0, 1), edgecolor='black')
-        plt.title('Istogramma')
-        plt.xlabel('Valore')
-        plt.ylabel('Frequenza')
-        plt.grid(True)
-        plt.show()
-
-        values = false.flatten().cpu().numpy()
-        plt.hist(values, bins=50, range=(0, 1), edgecolor='black')
-        plt.title('Istogramma')
-        plt.xlabel('Valore')
-        plt.ylabel('Frequenza')
-        plt.grid(True)
-        plt.show()
+    #this piece of code is made to remove element of extra classes in the train set
+    a = y % (args.classes_per_exp + args.extra_classes)
+    y = y[a < args.classes_per_exp]
+    y_hats = y_hats[a < args.classes_per_exp]
+    y_taw = y_taw[a < args.classes_per_exp]
+    task_predictions = task_predictions[a < args.classes_per_exp]
+    task_ids = task_ids[a < args.classes_per_exp]
 
 
     # assign +1 to the confusion matrix for each prediction that matches the label
     for i in range(y.shape[0]):
         confusion_mat[y[i], y_hats[i]] += 1
-        confusion_mat_e[y[i], y_hats_e[i]] += 1
         confusion_mat_taw[y[i], y_taw[i]] += 1
 
     
     #task confusion matrix and forgetting mat
-    if args.mode != 4:
+    if args.extra_classes == 0:
         for j in range(strategy.experience_idx+1):
             i = strategy.experience_idx
             acc_conf_mat_task = confusion_mat[j*args.classes_per_exp:(j+1)*args.classes_per_exp, j*args.classes_per_exp:(j+1)*args.classes_per_exp].diag().sum()/confusion_mat[i*args.classes_per_exp:(i+1)*args.classes_per_exp,:].sum()
@@ -305,11 +174,10 @@ def test(strategy, test_set, plot=True):
         
     # compute accuracy
     accuracy = confusion_mat.diag().sum() / confusion_mat.sum()
-    accuracy_e = confusion_mat_e.diag().sum() / confusion_mat_e.sum()
     accuracy_taw = confusion_mat_taw.diag().sum() / confusion_mat_taw.sum()
 
     task_accuracy = (task_predictions==task_ids).sum()/y_hats.shape[0]
-    print(f"Test Accuracy: {accuracy:.4f},Test Accuracy with entropy: {accuracy_e:.4f},Test Accuracy taw: {accuracy_taw:.4f}, Task accuracy: {task_accuracy:.4f}")
+    print(f"Test Accuracy: {accuracy:.4f}, Test Accuracy taw: {accuracy_taw:.4f}, Task accuracy: {task_accuracy:.4f}")
     get_stat_exp(y, y_hats, strategy.experience_idx, task_ids,task_predictions)
 
     if plot:
@@ -324,7 +192,6 @@ def test(strategy, test_set, plot=True):
         res = {}
         res['y'] = y.cpu().numpy()
         res['y_hats'] = y_hats.cpu().numpy()
-        res['y_hats_e'] = y_hats_e.cpu().numpy()
         res['frag_preds'] = frag_preds.cpu().numpy()
         res['entropy_frag'] = entropy_frag.cpu().numpy()
         res['y_taw'] = y_taw.cpu().numpy()
@@ -333,23 +200,20 @@ def test(strategy, test_set, plot=True):
         with open(f'./logs/{args.run_name}/res.pkl', 'wb') as f:
             pkl.dump(res, f)
 
-    return accuracy, task_accuracy, accuracy_e, accuracy_taw
+    return accuracy, task_accuracy, accuracy_taw
 
 
 #################### MIND TESTS ####################
 
 def test_single_exp(pruner, tested_model, loader, exp_idx, distillation):
     confusion_mat = torch.zeros((args.n_classes, args.n_classes))
-    if args.mode == 4:
+    if args.extra_classes > 0:
         confusion_mat = torch.zeros((args.n_classes+args.extra_classes*args.n_experiences, args.n_classes+args.extra_classes*args.n_experiences))
     y_hats = []
     ys = []
     for i, (x, y, _) in enumerate(loader):
         model = freeze_model(deepcopy(tested_model))
-        if args.contrastive == 1:
-            pred, _ = model(x.to(args.device))
-        else:
-            pred = model(x.to(args.device))
+        pred = model(x.to(args.device))
         '''if args.mode != 1:
             pred = model(x.to(args.device))
         else:

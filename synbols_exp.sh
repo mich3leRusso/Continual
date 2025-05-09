@@ -17,7 +17,7 @@ conda activate env_9
 # Experiments Table 1 (A) - Synbols
 for seed in 0 1 2 3 4 5 6 7 8 9;
 do
-    python /davinci-1/home/dmor/PycharmProjects/MIND/main_2.py --run_name "synbols_CSIx4" \
+    python /davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/main.py --run_name "synbols_CSIx4" \
             --dataset "Synbols" \
             --cuda 0 \
             --seed $seed \
@@ -30,11 +30,6 @@ do
             --lr_distillation 0.035 \
             --scheduler_distillation 15 \
             --temperature 4 \
-            --mode 4 \
-            --extra_classes 60 \
-            --aug_inf 0 \
-            --num_aug 10 \
-            --dropout 0.0 \
-            --contrastive 0 \
-            --p 0.5
+            --class_augmentation 1 \
+
 done

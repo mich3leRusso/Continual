@@ -151,7 +151,7 @@ class GatedCifarResNet(nn.Module):
         #expansion = block.expansion
 
         self.out_dim = 64 * block.expansion
-        if args.mode != 4:
+        if args.extra_classes == 0:
             self.fc = GatedLinear(64*expansion, classes_out, bias=False)
         else:
             self.fc = GatedLinear(64 * expansion, classes_out+args.extra_classes*args.n_experiences, bias=False)
@@ -202,10 +202,7 @@ class GatedCifarResNet(nn.Module):
         #     'features': features
         # }
 
-        if args.contrastive == 0:
-            return self.fc(features) * self.output_mask[self.exp_idx]
-        else:
-            return self.fc(features) * self.output_mask[self.exp_idx], features
+        return self.fc(features) * self.output_mask[self.exp_idx]
 
         
     def forward_fts(self, x):
@@ -234,7 +231,7 @@ class GatedCifarResNet(nn.Module):
     def set_output_mask(self, exp_idx, classes_in_this_exp):
         # set zero to all the output neurons that are not in this experience
         self.exp_idx = exp_idx
-        if args.mode != 4:
+        if args.extra_classes == 0:
             self.output_mask[exp_idx] = torch.nn.functional.one_hot( torch.tensor(classes_in_this_exp), num_classes=OPT.n_classes).sum(dim=0).float().to(OPT.device)
         else:
             self.output_mask[exp_idx] = torch.nn.functional.one_hot(torch.tensor(classes_in_this_exp),num_classes=OPT.n_classes+args.extra_classes*args.n_experiences).sum(dim=0).float().to(OPT.device)
