@@ -29,11 +29,13 @@ from continuum.scenarios import ContinualScenario
 from time import time
 import torchvision.transforms as transforms
 from test_fn import test_robustness_OOD
+import pandas as pd
 
 def main():
 
 
     data_path = "/archive/HPCLab_exchange/4Mor"
+    #data_path="/davinci-1/home/micherusso/PycharmProjects/MIND_real/data"
 
 
     # set seed of torch and othrs
@@ -71,9 +73,7 @@ def main():
 
     strategy = MIND(model)
 
-    #per il one ring la modifica andrebbe fatta qua , ovvero nelle classi che chiamano il dataset, per mettere la label UNK e nella rete aggiungere una label in più?(forse una in più?)
-    #mentre per l'implementazione in fase di inferenza bisognerebbe che sia la rete distillata , che quella non distillata imparino a mettere per bene le le labels del one ring , quindi
-    #pure la funzione di train va cambiata.
+    #SISTEMARE QUESTA PARTE QUA PER IL NUMERO DI PERTURBAZIONI E QUANDO NON
     if args.dataset == 'CIFAR100':
         class_order = list(range(100))
 
@@ -97,24 +97,35 @@ def main():
 
     elif 'CORE50' in args.dataset :
         print("dataset core 50 in creazione")
+
         if args.dataset == 'CORE50_CI':
             #split the dataset for each task and for each class, assi9gnis to each task 5 classes
             train_data, test_data = get_all_core50_data(data_path, args.n_experiences, split=0.8)
+            print("fatto uno split")
         else:
             train_data, test_data = get_all_core50_scenario(data_path, split=0.8)
 
         #put in memory the dataset
         train_dataset = InMemoryDataset(*train_data)
         test_dataset = InMemoryDataset(*test_data)
-
-        #Continual Loader, generating datasets for the consecutive tasks
+        # Continual Loader, generating datasets for the consecutive tasks
         strategy.train_scenario = ContinualScenario(
             train_dataset,
             transformations=default_transforms_core50)
 
-        strategy.test_scenario = ContinualScenario(
-            test_dataset,
-            transformations=to_tensor_and_normalize_core50)
+        if args.number_perturbations is not None:
+
+            strategy.test_scenario = ContinualScenario(
+                test_dataset,
+                transformations=to_tensor)
+
+        else:
+
+
+
+            strategy.test_scenario = ContinualScenario(
+                test_dataset,
+                transformations=to_tensor_and_normalize_core50)
 
     elif args.dataset == 'TinyImageNet':
 
@@ -126,11 +137,18 @@ def main():
             train_dataset,
             increment=args.n_classes//args.n_experiences,
             transformations=default_transforms_TinyImageNet)
+        if args.number_perturbations is not None:
 
-        strategy.test_scenario = ClassIncremental(
-            test_dataset,
-            increment=args.n_classes//args.n_experiences,
-            transformations=to_tensor)
+            strategy.test_scenario = ClassIncremental(
+                test_dataset,
+                increment=args.n_classes//args.n_experiences,
+                transformations=to_tensor)
+
+        else:
+            strategy.test_scenario = ClassIncremental(
+                test_dataset,
+                increment=args.n_classes//args.n_experiences,
+                transformations=to_tensor_and_normalize_TinyImageNet)
 
     elif args.dataset == 'Synbols':
 
@@ -143,10 +161,17 @@ def main():
             increment=args.n_classes//args.n_experiences,
             transformations=default_transforms_Synbols)
 
-        strategy.test_scenario = ClassIncremental(
-            test_dataset,
-            increment=args.n_classes//args.n_experiences,
-            transformations=to_tensor_and_normalize_Synbols)
+        if args.number_perturbations is not None:
+            strategy.test_scenario = ClassIncremental(
+                test_dataset,
+                increment=args.n_classes//args.n_experiences,
+                transformations=to_tensor)
+
+        else:
+            strategy.test_scenario = ClassIncremental(
+                test_dataset,
+                increment=args.n_classes//args.n_experiences,
+                transformations=to_tensor_and_normalize_Synbols)
 
 
     #tells the TOTAL number of classes
@@ -247,8 +272,11 @@ def main():
             print("Start training")
             strategy.train()
 
+
         #################### TEST ##########################
         # concatenate pytorch datasets up to the current experience
+        sanity_check=False
+        file_path = args.dataset+".csv"
         print("inizio test")
         with torch.no_grad():
             # write accuracy on the test set
@@ -258,16 +286,61 @@ def main():
         for idx, temperature in enumerate(args.temperature):
 
             if args.number_perturbations is not None:
+
                 for n_pert in args.number_perturbations:
 
                     if sanity_check:
                         confusion_mat = test_robustness_OOD(strategy, strategy.test_scenario[:11], i, temperature, sanity_check)
 
-                #total_acc, task_acc, accuracy_taw = test_onering(strategy, strategy.test_scenario[:i + 1]) #(to be tested and debugged )
-                    total_acc, task_acc, accuracy_e, accuracy_taw = test(strategy, strategy.test_scenario[:i + 1], temperature, n_pert)
+                    total_acc, task_acc, accuracy_e, accuracy_taw = test(strategy, strategy.test_scenario[:i + 1],
+                                                                         temperature, n_pert)
+                    if strategy.experience_idx == 9:
+
+                        #total_acc, task_acc, accuracy_taw = test_onering(strategy, strategy.test_scenario[:i + 1]) #(to be tested and debugged )
+
+
+                            final_results = {
+                                'seed': args.seed,
+                                'temperature': temperature,
+                                'perturbation': n_pert,
+                                'total_acc': total_acc.item(),
+                                'task_acc': task_acc.item(),  # If list, convert to string
+                                'accuracy_e': accuracy_e.item(),
+                                'accuracy_taw': accuracy_taw.item()
+                            }
+
+                            print(final_results)
+                            df = pd.DataFrame([final_results])
+                            if os.path.exists(file_path):
+                                df.to_csv(file_path, mode='a', header=False, index=False)
+                            else:
+                                df.to_csv(file_path, mode='w', header=True, index=False)
+
+
+
             else:
+
                 total_acc, task_acc, accuracy_e, accuracy_taw = test(strategy, strategy.test_scenario[:i + 1],
-                                                                     temperature, 0)
+                                                                  temperature, 0)
+                if strategy.experience_idx==9:
+
+                    final_results = {
+                        'seed': args.seed,
+                        'temperature': temperature,
+                        'perturbation': 0,
+                        'total_acc': total_acc.item(),
+                        'task_acc': task_acc.item(),  # If list, convert to string
+                        'accuracy_e': accuracy_e.item(),
+                        'accuracy_taw': accuracy_taw.item()
+                    }
+
+                    df = pd.DataFrame([final_results])
+
+                    if os.path.exists(file_path):
+                                df.to_csv(file_path, mode='a', header=False, index=False)
+                    else:
+                                df.to_csv(file_path, mode='w', header=True, index=False)
+
 
 
 
@@ -279,7 +352,7 @@ def main():
                 f.write(f"{strategy.experience_idx},{accuracy_taw:.4f}\n")
 
         # save the model and the masks
-        save_model=False
+        save_model=True
 
         if not save_model:
             print("SAVING THE MODEL")

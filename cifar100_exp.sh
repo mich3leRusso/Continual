@@ -15,7 +15,7 @@ source /archive/apps/miniconda/miniconda3/py312_2/etc/profile.d/conda.sh
 
 conda activate MIND
 
-for seed in 0 1 2 3 4 5 6 7 8 9;
+for seed in 0 ;
 do
   python  /davinci-1/home/micherusso/PycharmProjects/MIND_real/main.py --run_name "cifar100_experiment" \
               --dataset "CIFAR100" \
@@ -31,6 +31,7 @@ do
               --scheduler_distillation 40 \
               --temperature 8.5  \
               --load_model_from_run "cifar100_experiment" \
-              --number_perturbations 5 10 20
+              --number_perturbations 0
+
 
 done

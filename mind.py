@@ -188,6 +188,7 @@ class MIND():
             self.loss_ce = torch.tensor(0.).to(args.device)
             self.loss_distill = torch.tensor(0.).to(args.device)
             self.loss_ce_onering= torch.tensor(0.).to(args.device)
+
             self.mb_output = self.fresh_model.forward(self.mb_x.to(args.device))
 
 

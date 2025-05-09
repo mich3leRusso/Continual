@@ -9,8 +9,9 @@ from torchvision import transforms
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from utils.transforms import expansion_transforms, to_tensor_and_normalize, expansion_transforms_tiny
+from utils.transforms import expansion_transforms, to_tensor_and_normalize, expansion_transforms_tiny, expansion_transforms_synbols, expansion_transforms_core50
 import os
+from Explainability import lime_tool
 
 def get_stat_exp(y,y_hats,exp_idx, task_id,task_predictions):
     """ Compute accuracy and task accuracy for each experience."""
@@ -188,19 +189,40 @@ def apply_transforms_and_permute(batch, num_permutations):
     batch_size, channels, height, width = batch.shape
     permuted_images = []
 
-    trans = transforms.Normalize(
+    if args.dataset == "TinyImageNet":
+        trans = transforms.Normalize(
             (0.5071, 0.4865, 0.4409), (0.2673, 0.2564, 0.2762)
         )
+    elif args.dataset == "CIFAR100":
+        trans = transforms.Normalize(
+            (0.5071, 0.4865, 0.4409), (0.2673, 0.2564, 0.2762)
+        )
+    elif args.dataset == "Synbols":
+        trans = transforms.Normalize(
+            (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
+
+        )
+
+    elif args.dataset == "CORE50_CI":
+        trans = transforms.Normalize(
+            (0.5998523831367493, 0.5575963854789734, 0.5395311713218689), (0.20457075536251068, 0.2166813313961029, 0.22945666313171387)
+        )
+
 
     for img in batch:
         #keep the original image
         permuted_images.append(trans(img))
+
+
         for _ in range(num_permutations-1):
             if args.dataset == "TinyImageNet":
                 transformed_img = expansion_transforms_tiny(img)
             elif args.dataset == "CIFAR100":
                 transformed_img = expansion_transforms(img)  # Apply transformations to tensor
-
+            elif args.dataset == "Synbols":
+                transformed_img =expansion_transforms_synbols(img)
+            elif args.dataset =="CORE50_CI":
+                transformed_img = expansion_transforms_core50(img)
             permuted_images.append(transformed_img)
 
     return torch.stack(permuted_images, dim=0)
@@ -307,8 +329,10 @@ def test(strategy, test_set, temperature, n_perturb, plot=True):
     task_ids = []
     y_hats_th=[]
     check_entropy_th=False
+    explainability=True
 
     for i, (x, y, task_id) in enumerate(dataloader):
+
         frag_preds = []
         entropy_frag = []
         batch_size=y.shape[0]
@@ -321,6 +345,9 @@ def test(strategy, test_set, temperature, n_perturb, plot=True):
             model.load_bn_params(j)
             model.exp_idx = j
 
+            lime_tool(x,model)
+            input()
+
             #new Permutations
             if n_perturb!=0:
 
@@ -330,15 +357,19 @@ def test(strategy, test_set, temperature, n_perturb, plot=True):
                 pred = model(x.to(args.device))
 
             if not args.dataset == 'CORE50':
+
                 last = pred[:, args.n_classes + j].unsqueeze(1)
 
+
+
                 pred = pred[:, j * args.classes_per_exp:(j + 1) * args.classes_per_exp]
+
                 pred = torch.cat([pred, last], dim=1)
 
 
 
             #mute the unk_classes
-            probs=torch.softmax(pred /temperature, dim=1)
+            probs=torch.softmax(pred / temperature, dim=1)
             #print(probs.shape)
 
             if n_perturb!=0:
@@ -418,6 +449,9 @@ def test(strategy, test_set, temperature, n_perturb, plot=True):
         confusion_mat_e[y[i], y_hats_e[i]] += 1
         confusion_mat_taw[y[i], y_taw[i]] += 1
 
+
+
+
     # task confusion matrix and forgetting mat
     for j in range(strategy.experience_idx + 1):
         i = strategy.experience_idx
@@ -467,9 +501,11 @@ def test(strategy, test_set, temperature, n_perturb, plot=True):
 
 #################### MIND TESTS ####################
 def test_single_exp(pruner, tested_model, loader, exp_idx, distillation):
+
     confusion_mat = torch.zeros((args.n_classes, args.n_classes))
     y_hats = []
     ys = []
+
     for i, (x, y, _) in enumerate(loader):
         model = freeze_model(deepcopy(tested_model))
         preds = torch.softmax(model(x.to(args.device)), dim=1)
@@ -477,6 +513,7 @@ def test_single_exp(pruner, tested_model, loader, exp_idx, distillation):
 
         y_hats.append(preds.argmax(dim=1))
         ys.append(y)
+
 
     # concat labels and preds
     y_hats = torch.cat(y_hats, dim=0).to('cpu')
@@ -692,18 +729,21 @@ def test_during_training(pruner, train_dloader, test_dloader, model, fresh_model
 
         train_conf_mat = test_single_exp(pruner, model, train_dloader, exp_idx, distillation)
         test_conf_mat = test_single_exp(pruner, model, test_dloader, exp_idx, distillation)
+
         #check if the second class is the unk class for that task
-        if epoch>=40 or distillation:
+        if epoch>=args.sweep and  distillation:
             train_conf_mat_onering = test_single_exp_onering(pruner, model, train_dloader, exp_idx, distillation)
             test_conf_mat_onering = test_single_exp_onering(pruner, model, test_dloader, exp_idx, distillation)
+
         # compute accuracy
         train_acc = train_conf_mat.diag().sum() / train_conf_mat.sum()
         test_acc = test_conf_mat.diag().sum() / test_conf_mat.sum()
-        if epoch>=40 or distillation:
+
+        if epoch>=args.sweep and distillation:
             train_acc_onering = train_conf_mat_onering.diag().sum() / train_conf_mat_onering.sum()
             test_acc_onering = test_conf_mat_onering.diag().sum() / test_conf_mat_onering.sum()
 
-        if epoch>=40 or distillation:
+        if epoch>=args.sweep and distillation:
             print(f"    e:{epoch:03}, tr_acc:{train_acc:.4f}, te_acc:{test_acc:.4f} tr_acc_onering:{train_acc_onering:.4f}, te_acc_onering:{test_acc_onering:.4f} lr:{scheduler.get_last_lr()[0]:.5f}")
         else:
             print(
