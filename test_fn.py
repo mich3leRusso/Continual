@@ -10,34 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 
-default_transforms = [
-        transforms.RandomCrop(32, padding=4),
-        transforms.RandomHorizontalFlip(),
-        transforms.ColorJitter(brightness=63 / 255),
-        transforms.ToTensor()
-    ]
-
-'''def pert_CSI(x, y):
-    x_=[x]
-    y_=[y]
-    task=math.floor(y/10) ########funziona assumendo y parta da 0
-    t=math.ceil(args.extra_classes / args.classes_per_exp)
-    p=(args.extra_classes-1) % args.classes_per_exp
-    for i in range(t):
-        if i == (t-1):
-            if (y % args.classes_per_exp) <= p:
-                x_.append(np.rot90(x, t))
-                y_.append(args.classes_per_exp*args.experiences+args.extra_classes*(task)+t*args.classes_per_exp+(y%args.classes_per_exp))
-        else:
-            x_.append(np.rot90(x, t))
-            y_.append(
-            args.classes_per_exp * args.experiences + args.extra_classes * (task) + t * args.classes_per_exp + (y % args.classes_per_exp))
-
-    return x_, y_'''
-
-
 def get_stat_exp(y, y_hats, exp_idx, task_id, task_predictions):
-
     """ Compute accuracy and task accuracy for each experience."""
     conf_mat = torch.zeros((exp_idx+1, exp_idx+1))
     for i in range(exp_idx+1):
@@ -59,13 +32,9 @@ def test(strategy, test_set, plot=True):
     strategy.model.eval()
     dataloader = DataLoader(test_set, batch_size=1000, shuffle=False, num_workers=8)
 
-    if args.extra_classes > 0:
-        s = args.n_classes + int(args.extra_classes*args.n_experiences)
-        confusion_mat = torch.zeros((s, s))
-        confusion_mat_taw = torch.zeros((s, s))
-    else:
-        confusion_mat = torch.zeros((args.n_classes, args.n_classes))
-        confusion_mat_taw = torch.zeros((args.n_classes, args.n_classes))
+    s = args.n_classes + int(args.extra_classes*args.n_experiences)
+    confusion_mat = torch.zeros((s, s))
+    confusion_mat_taw = torch.zeros((s, s))
 
     y_hats = []
     y_taw = []
@@ -74,7 +43,6 @@ def test(strategy, test_set, plot=True):
     task_ids = []
     for i, (x, y, task_id) in enumerate(dataloader):
         frag_preds = []
-        frag_preds_2 = []
         for j in range(strategy.experience_idx+1):
             # create a temporary model copy
             model = freeze_model(deepcopy(strategy.model))
@@ -85,23 +53,11 @@ def test(strategy, test_set, plot=True):
 
             pred = model(x.to(args.device))
 
-            if not args.dataset == 'CORE50':
-                if args.extra_classes > 0:
-                    pred = pred[:, j * (args.classes_per_exp + args.extra_classes): (j + 1) * (args.classes_per_exp + args.extra_classes)]
-                else:
-                    pred = pred[:, j * args.classes_per_exp:(j + 1) * args.classes_per_exp]
-
-            #nella modalità 4 abbiamo classi aggiuntive quindi rimuovo i relativi pezzi
-            if args.extra_classes > 0:
-                sp = torch.softmax(pred/args.temperature, dim=1)
-                sp = sp[:, :args.classes_per_exp]
-                frag_preds.append(torch.softmax(sp / args.temperature, dim=1))
-            else:
-                frag_preds.append(torch.softmax(pred/args.temperature, dim=1))
-                frag_preds_2.append(pred)
-
-        #on_shell_confidence, elsewhere_confidence = confidence(frag_preds, task_id)
-        #print(f"on_shell confidence:{[round(c.item(), 2) for c in on_shell_confidence]}\nelsewhere confidence:{[round(c.item(), 2) for c in elsewhere_confidence]}")
+            #in class augmentation we have additional classes, this part of the code is made to ignore them
+            pred = pred[:, j * (args.classes_per_exp + args.extra_classes): (j + 1) * (args.classes_per_exp + args.extra_classes)]
+            sp = torch.softmax(pred/args.temperature, dim=1)
+            sp = sp[:, :args.classes_per_exp]
+            frag_preds.append(sp)
 
         frag_preds = torch.stack(frag_preds)  # [n_frag, bsize, n_classes]
 
@@ -109,24 +65,14 @@ def test(strategy, test_set, plot=True):
 
         ### select across the top 2 of likelihood the head  with the lowest entropy
         # buff -> batch_size  x 2, 0-99 val
-        #print(frag_preds[:, 9, :])
         buff = frag_preds.max(dim=-1)[0].argsort(dim=0)[-2:] # [2, bsize]
 
         # buff_entropy ->  2 x batch_size, entropy values
         indices = torch.arange(batch_size)
 
         task_predictions.append(buff[-1])
-        if args.dataset == 'CORE50':
-            y_hats.append(frag_preds[buff[-1], indices].argmax(dim=1))
-            y_taw.append(frag_preds[task_id.to(torch.int32), indices].argmax(dim=-1))
-
-        else:
-            if args.extra_classes == 0:
-                y_hats.append(frag_preds[buff[-1], indices].argmax(dim=1) + args.classes_per_exp*buff[-1])
-                y_taw.append(frag_preds[task_id.to(torch.int32), indices].argmax(dim=-1) + (args.classes_per_exp*task_id.to(args.cuda)).to(torch.int32))
-            else:
-                y_hats.append(frag_preds[buff[-1], indices].argmax(dim=1) + (args.classes_per_exp + args.extra_classes)*buff[-1])
-                y_taw.append(frag_preds[task_id.to(torch.int32), indices].argmax(dim=-1) + ((args.classes_per_exp + args.extra_classes)*task_id.to(args.cuda)).to(torch.int32))
+        y_hats.append(frag_preds[buff[-1], indices].argmax(dim=1) + (args.classes_per_exp + args.extra_classes)*buff[-1])
+        y_taw.append(frag_preds[task_id.to(torch.int32), indices].argmax(dim=-1) + ((args.classes_per_exp + args.extra_classes)*task_id.to(args.cuda)).to(torch.int32))
 
         task_ids.append(task_id)
         ys.append(y)
@@ -155,19 +101,11 @@ def test(strategy, test_set, plot=True):
 
     
     #task confusion matrix and forgetting mat
-    if args.extra_classes == 0:
-        for j in range(strategy.experience_idx+1):
-            i = strategy.experience_idx
-            acc_conf_mat_task = confusion_mat[j*args.classes_per_exp:(j+1)*args.classes_per_exp, j*args.classes_per_exp:(j+1)*args.classes_per_exp].diag().sum()/confusion_mat[i*args.classes_per_exp:(i+1)*args.classes_per_exp,:].sum()
-            strategy.confusion_mat_task[i][j] = acc_conf_mat_task
-            strategy.forgetting_mat[i][j] = strategy.confusion_mat_task[:, j].max()-acc_conf_mat_task
-    else:
-        # task confusion matrix and forgetting mat
-        for j in range(strategy.experience_idx + 1):
-            i = strategy.experience_idx
-            acc_conf_mat_task = confusion_mat[j * (args.classes_per_exp + args.extra_classes):(j + 1) * (args.classes_per_exp + args.extra_classes),j * (args.classes_per_exp + args.extra_classes):(j + 1) * (args.classes_per_exp + args.extra_classes)].diag().sum() / confusion_mat[i * (args.classes_per_exp + args.extra_classes):(i + 1) * (args.classes_per_exp + args.extra_classes),:].sum()
-            strategy.confusion_mat_task[i][j] = acc_conf_mat_task
-            strategy.forgetting_mat[i][j] = strategy.confusion_mat_task[:, j].max() - acc_conf_mat_task
+    for j in range(strategy.experience_idx + 1):
+        i = strategy.experience_idx
+        acc_conf_mat_task = confusion_mat[j * (args.classes_per_exp + args.extra_classes):(j + 1) * (args.classes_per_exp + args.extra_classes),j * (args.classes_per_exp + args.extra_classes):(j + 1) * (args.classes_per_exp + args.extra_classes)].diag().sum() / confusion_mat[i * (args.classes_per_exp + args.extra_classes):(i + 1) * (args.classes_per_exp + args.extra_classes),:].sum()
+        strategy.confusion_mat_task[i][j] = acc_conf_mat_task
+        strategy.forgetting_mat[i][j] = strategy.confusion_mat_task[:, j].max() - acc_conf_mat_task
 
 
     
@@ -206,26 +144,12 @@ def test(strategy, test_set, plot=True):
 #################### MIND TESTS ####################
 
 def test_single_exp(pruner, tested_model, loader, exp_idx, distillation):
-    confusion_mat = torch.zeros((args.n_classes, args.n_classes))
-    if args.extra_classes > 0:
-        confusion_mat = torch.zeros((args.n_classes+args.extra_classes*args.n_experiences, args.n_classes+args.extra_classes*args.n_experiences))
+    confusion_mat = torch.zeros((args.n_classes+args.extra_classes*args.n_experiences, args.n_classes+args.extra_classes*args.n_experiences))
     y_hats = []
     ys = []
     for i, (x, y, _) in enumerate(loader):
         model = freeze_model(deepcopy(tested_model))
         pred = model(x.to(args.device))
-        '''if args.mode != 1:
-            pred = model(x.to(args.device))
-        else:
-            # model.apply(enable_dropout)
-            model.train()
-            m = 100
-            for z in range(m):
-                if z == 0:
-                    pred = model(x.to(args.device))
-                else:
-                    pred = pred + model(x.to(args.device))
-            pred = pred / m'''
         preds = torch.softmax(pred, dim=1)
 
         #frag preds size = (hid,bsize,100) and I want to reshape (bsize, hid, 100)
@@ -235,6 +159,11 @@ def test_single_exp(pruner, tested_model, loader, exp_idx, distillation):
     # concat labels and preds
     y_hats = torch.cat(y_hats, dim=0).to('cpu')
     y = torch.cat(ys, dim=0).to('cpu')
+
+    #to filter out external elements
+    a = y % (args.classes_per_exp + args.extra_classes)
+    y = y[a < args.classes_per_exp]
+    y_hats = y_hats[a < args.classes_per_exp]
 
     # assign +1 to the confusion matrix for each prediction that matches the label
     for i in range(y.shape[0]):

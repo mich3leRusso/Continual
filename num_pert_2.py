@@ -253,12 +253,9 @@ for ss in range(10):
             increment=inc,
             transformations=to_tensor_and_normalize_TinyImageNet)
 
-    elif 'CORE50' in args.dataset :
+    elif args.dataset == 'CORE50_CI':
         data_path = os.path.expanduser('/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/data_64x64/core50_128x128')
-        if args.dataset == 'CORE50_CI':
-            train_data, test_data = get_all_core50_data(data_path, args.n_experiences, split=0.8)
-        else:
-            train_data, test_data = get_all_core50_scenario(data_path, split=0.8)
+        train_data, test_data = get_all_core50_data(data_path, args.n_experiences, split=0.8)
 
         r = int(args.extra_classes / 5)
 

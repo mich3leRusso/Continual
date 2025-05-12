@@ -15,7 +15,7 @@ source /archive/apps/miniconda/miniconda3/py312_2/etc/profile.d/conda.sh
 conda activate env_9
 
 # Experiments Table 1 (A) - TinyImageNet
-for seed in 0 1 2 3 4 5 6 7 8 9;
+for seed in 0 #1 2 3 4 5 6 7 8 9;
 do
     python /davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/main.py --run_name "tiny_CSIx4" \
             --dataset "TinyImageNet" \
@@ -23,13 +23,13 @@ do
             --seed $seed \
             --n_experiences 10 \
             --model "gresnet32" \
-            --epochs 100 \
+            --epochs 10 \
             --lr 0.005 \
             --scheduler 70 90 \
-            --epochs_distillation 120 \
+            --epochs_distillation 12 \
             --lr_distillation 0.035 \
             --scheduler_distillation 80 110 \
             --temperature 12 \
-            --class_augmentation 60
+            --class_augmentation 2
 
 done

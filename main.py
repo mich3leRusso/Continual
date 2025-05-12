@@ -63,393 +63,98 @@ def main():
     strategy = MIND(model)
 
     if args.dataset == 'CIFAR100':
-        class_order = list(range(100))
-        random.shuffle(class_order)
-
-        train_dataset = CIFAR100(data_path, download=True, train=True)
-        test_dataset = CIFAR100(data_path, download=True, train=False)
-
-        r = int(args.extra_classes / args.classes_per_exp)
-
-        if args.control == 1:
-            # modifico i dati in se (train)
-            new_y = []
-            new_x = []
-            old_x = train_dataset.get_data()[0]
-            old_y = train_dataset.get_data()[1]
-            for k in range(r):
-                for i in range(len(old_y)):
-                    new_y.append(old_y[i])
-                    new_y.append(old_y[i])
-                    new_x.append(old_x[i])
-                    new_x.append(np.rot90(old_x[i], k+1))
-            new_x = np.array(new_x)
-            new_y = np.array(new_y)
-            train_dataset = InMemoryDataset(new_x, new_y)
-
-        if args.extra_classes > 0:
-            # modifico il class order
-            class_order_ = []
-            for t in range(10):
-                for k in range(r+1):
-                    for c in range(10):
-                        class_order_.append(class_order[t * 10 + c]+100*k)
-            class_order = class_order_
-
-            # modifico i dati in se (train)
-            new_y = []
-            new_x = []
-            old_x = train_dataset.get_data()[0]
-            old_y = train_dataset.get_data()[1]
-            for i in range(len(old_y)):
-                for k in range(r+1):
-                    new_y.append(old_y[i]+100*k)
-                    new_x.append(np.rot90(old_x[i], k))
-            new_x = np.array(new_x)
-            new_y = np.array(new_y)
-            train_dataset = InMemoryDataset(new_x, new_y)
-
-            # modifico i dati in se (test)
-            new_y = []
-            new_x = []
-            old_x = test_dataset.get_data()[0]
-            old_y = test_dataset.get_data()[1]
-
-            #####################################################################
-            #                 ATTENZIONE! Problema da risolvere                 #
-            #####################################################################
-            for i in range(args.n_experiences * args.extra_classes):
-                new_y.append(100+i)
-                new_x.append(old_x[0])
-            #####################################################################
-
-            for i in range(len(old_y)):
-                new_y.append(old_y[i])
-                #new_y.append(old_y[i] + 100)
-                new_x.append(old_x[i])
-                #new_x.append(np.rot90(old_x[i], 2))
-            new_x = np.array(new_x)
-            new_y = np.array(new_y)
-            test_dataset = InMemoryDataset(new_x, new_y)
-
-            strategy.train_scenario = ClassIncremental(
-                train_dataset,
-                increment=args.classes_per_exp + args.extra_classes,
-                class_order=class_order,
-                transformations=default_transforms)
-        else:
-            old_x = train_dataset.get_data()[0]
-            old_y = train_dataset.get_data()[1]
-            permutazione = sorted(range(len(old_y)), key=lambda i: old_y[i])
-            new_x = old_x[permutazione]
-            new_y = old_y[permutazione]
-            train_dataset = InMemoryDataset(new_x, new_y)
-
-            strategy.train_scenario = ClassIncremental(
-                train_dataset,
-                increment=args.classes_per_exp,
-                class_order=class_order,
-                transformations=default_transforms)
-
-        if args.extra_classes > 0:
-            inc = args.classes_per_exp + args.extra_classes
-        else:
-            inc = args.classes_per_exp
-
-        tra = to_tensor_and_normalize
-
-        strategy.test_scenario = ClassIncremental(
-            test_dataset,
-            increment=inc,
-            class_order=class_order,
-            transformations=tra)
-        strategy.test_scenario_2 = ClassIncremental(
-            test_dataset,
-            increment=inc,
-            class_order=class_order,
-            transformations=to_tensor_and_normalize)
-
-    elif 'CORE50' in args.dataset :
+        train_dataset = CIFAR100(data_path, download=True, train=True).get_data()
+        test_dataset = CIFAR100(data_path, download=True, train=False).get_data()
+        transform_1 = default_transforms
+        transform_2 = to_tensor_and_normalize
+    elif args.dataset == 'CORE50_CI':
         data_path = os.path.expanduser('/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/data_64x64/core50_128x128')
-        if args.dataset == 'CORE50_CI':
-            train_data, test_data = get_all_core50_data(data_path, args.n_experiences, split=0.8)
-        else:
-            train_data, test_data = get_all_core50_scenario(data_path, split=0.8)
-
-        r = int(args.extra_classes / 5)
-
-        if args.extra_classes > 0:
-            new_x = []
-            new_y = []
-            new_z = []  # task di appartenenza
-
-            old_x = train_data[0]
-            old_y = train_data[1]
-            old_z = train_data[2]
-
-            for k in range(r + 1):
-                for i in range(old_x.shape[0]):
-                    new_x.append(np.rot90(old_x[i], k))
-                    new_y.append(old_y[i] + 50 * k)
-                    new_z.append(old_z[i])
-            new_x = np.array(new_x)
-            new_y = np.array(new_y)
-            new_z = np.array(new_z)
-
-            class_order = []
-            for i in range(args.n_experiences):
-                classes_in_task = np.unique(new_y[new_z == i])
-                for j in range(len(classes_in_task)):
-                    class_order.append(int(classes_in_task[j]))
-
-            train_data = (new_x, new_y)
-
-            new_x = []
-            new_y = []
-
-            old_x = test_data[0]
-            old_y = test_data[1]
-
-            for i in range(old_x.shape[0]):
-                new_x.append(old_x[i])
-                new_y.append(old_y[i])
-            for j in range(r):
-                for i in range(50):
-                    new_x.append(old_x[0])
-                    new_y.append(50 * (j + 1) + i)
-
-            new_x = np.array(new_x)
-            new_y = np.array(new_y)
-
-            test_data = (new_x, new_y)
-        else:
-            class_order = []
-            for i in range(50):
-                class_order.append(i)
-
-        train_dataset = InMemoryDataset(*train_data)
-        test_dataset = InMemoryDataset(*test_data)
-
-        ### qui manca tutto il blocco per gestire le rotazioni
-
-        if args.extra_classes > 0:
-            inc = args.n_classes//args.n_experiences + args.extra_classes
-        else:
-            inc = args.n_classes//args.n_experiences
-
-        tra = to_tensor_and_normalize_core50
-
-        strategy.train_scenario = ClassIncremental(
-            train_dataset,
-            class_order=class_order,
-            increment=inc,
-            transformations=default_transforms_core50)
-
-        strategy.test_scenario = ClassIncremental(
-            test_dataset,
-            class_order=class_order,
-            increment=inc,
-            transformations=tra)
-
-        strategy.test_scenario_2 = ClassIncremental(
-            test_dataset,
-            class_order=class_order,
-            increment=inc,
-            transformations=to_tensor_and_normalize_core50)
-
+        train_dataset, test_dataset = get_all_core50_data(data_path, args.n_experiences, split=0.8)
+        transform_1 = default_transforms_core50
+        transform_2 = to_tensor_and_normalize_core50
     elif args.dataset == 'TinyImageNet':
         data_path = os.path.expanduser('/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/data_64x64')
-        train_data, test_data = get_all_tinyImageNet_data(data_path,args.n_experiences)
-
-        r = int(args.extra_classes/20)
-
-        if args.extra_classes > 0:
-            new_x = []
-            new_y = []
-            new_z = []  #task di appartenenza
-
-            old_x = train_data[0]
-            old_y = train_data[1]
-            old_z = train_data[2]
-
-            for k in range(r + 1):
-                for i in range(old_x.shape[0]):
-                    new_x.append(np.rot90(old_x[i], k))
-                    new_y.append(old_y[i]+200*k)
-                    new_z.append(old_z[i])
-            new_x = np.array(new_x)
-            new_y = np.array(new_y)
-            new_z = np.array(new_z)
-
-            class_order = []
-            for i in range(args.n_experiences):
-                classes_in_task=np.unique(new_y[new_z==i])
-                for j in range(len(classes_in_task)):
-                    class_order.append(int(classes_in_task[j]))
-
-            train_data = (new_x, new_y)
-
-            new_x = []
-            new_y = []
-
-            old_x = test_data[0]
-            old_y = test_data[1]
-
-            for i in range(old_x.shape[0]):
-                new_x.append(old_x[i])
-                new_y.append(old_y[i])
-            for j in range(r):
-                for i in range(200):
-                    new_x.append(old_x[0])
-                    new_y.append(200*(j+1)+i)
-                    
-            new_x = np.array(new_x)
-            new_y = np.array(new_y)
-
-            test_data = (new_x, new_y)
-        else:
-            class_order=[]
-            for i in range(200):
-                class_order.append(i)
-
-        train_dataset = InMemoryDataset(*train_data)
-        test_dataset = InMemoryDataset(*test_data)
-
-        if args.extra_classes > 0:
-            inc = args.n_classes//args.n_experiences + args.extra_classes
-        else:
-            inc = args.n_classes//args.n_experiences
-
-        tra = to_tensor_and_normalize_TinyImageNet
-
-        strategy.train_scenario = ClassIncremental(
-            train_dataset,
-            class_order=class_order,
-            increment=inc,
-            transformations=default_transforms_TinyImageNet)
-
-        strategy.test_scenario = ClassIncremental(
-            test_dataset,
-            class_order=class_order,
-            increment=inc,
-            transformations=tra)
-
-        strategy.test_scenario_2 = ClassIncremental(
-            test_dataset,
-            class_order=class_order,
-            increment=inc,
-            transformations=to_tensor_and_normalize_TinyImageNet)
-
+        train_dataset, test_dataset = get_all_tinyImageNet_data(data_path, args.n_experiences)
+        transform_1 = default_transforms_TinyImageNet
+        transform_2 = to_tensor_and_normalize_TinyImageNet
     elif args.dataset == 'Synbols':
-
         train_data, test_data = get_synbols_data('/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/data_64x64', n_tasks=args.n_experiences)
-        train_dataset = InMemoryDataset(*train_data)
-        test_dataset = InMemoryDataset(*test_data)
+        train_dataset = InMemoryDataset(*train_data).get_data()
+        test_dataset = InMemoryDataset(*test_data).get_data()
+        transform_1 = default_transforms_Synbols
+        transform_2 = to_tensor_and_normalize_Synbols
 
-        class_order = list(range(200))
+    r = args.class_augmentation - 1
+
+    if (args.dataset == 'CIFAR100') | (args.dataset == 'TinyImageNet'):
+        class_order = list(range(args.n_classes))
         random.shuffle(class_order)
+        class_order_ = []
+        for t in range(args.n_experiences):
+            for k in range(r + 1):
+                for c in range(args.classes_per_exp):
+                    class_order_.append(class_order[t * args.classes_per_exp + c] + args.n_classes * k)
+        class_order = class_order_
 
-        r = int(args.extra_classes / args.classes_per_exp)
+    # modifying train set
+    new_y = []
+    new_x = []
+    old_x = train_dataset[0]
+    old_y = train_dataset[1]
+    for i in range(len(old_y)):
+        for k in range(r + 1):
+            new_y.append(old_y[i] + args.n_classes * k)
+            new_x.append(np.rot90(old_x[i], k))
+    new_x = np.array(new_x)
+    new_y = np.array(new_y)
 
-        if args.control == 0:
-            # modifico i dati in se (train)
-            new_y = []
-            new_x = []
-            old_x = train_dataset.get_data()[0]
-            old_y = train_dataset.get_data()[1]
-            for k in range(r):
-                for i in range(len(old_y)):
-                    new_y.append(old_y[i])
-                    new_y.append(old_y[i])
-                    new_x.append(old_x[i])
-                    new_x.append(np.rot90(old_x[i], k + 1))
-            new_x = np.array(new_x)
-            new_y = np.array(new_y)
-            train_dataset = InMemoryDataset(new_x, new_y)
+    if (args.dataset == 'CORE50_CI') | (args.dataset == 'Synbols'):
+        new_z = []
+        old_z = train_dataset[2]
+        for i in range(old_x.shape[0]):
+            for k in range(r + 1):
+                new_z.append(old_z[i])
+        new_z = np.array(new_z)
+        class_order = []
+        for i in range(args.n_experiences):
+            classes_in_task = np.unique(new_y[new_z == i])
+            for j in range(len(classes_in_task)):
+                class_order.append(int(classes_in_task[j]))
 
-        if args.extra_classes > 0:
-            # modifico il class order
-            class_order_ = []
-            for t in range(10):
-                for k in range(r + 1):
-                    for c in range(20):
-                        class_order_.append(class_order[t * 20 + c] + 200 * k)
-            class_order = class_order_
+    train_dataset = InMemoryDataset(new_x, new_y)
 
-            # modifico i dati in se (train)
-            new_y = []
-            new_x = []
-            old_x = train_dataset.get_data()[0]
-            old_y = train_dataset.get_data()[1]
-            for i in range(len(old_y)):
-                for k in range(r + 1):
-                    new_y.append(old_y[i] + 200 * k)
-                    new_x.append(np.rot90(old_x[i], k))
-            new_x = np.array(new_x)
-            new_y = np.array(new_y)
-            train_dataset = InMemoryDataset(new_x, new_y)
+    # modifying test set
+    new_y = []
+    new_x = []
+    old_x = test_dataset[0]
+    old_y = test_dataset[1]
+    for i in range(args.n_experiences * args.extra_classes):
+        new_y.append(args.n_classes + i)
+        new_x.append(old_x[0])
+    for i in range(len(old_y)):
+        new_y.append(old_y[i])
+        new_x.append(old_x[i])
+    new_x = np.array(new_x)
+    new_y = np.array(new_y)
+    test_dataset = InMemoryDataset(new_x, new_y)
 
-            # modifico i dati in se (test)
-            new_y = []
-            new_x = []
-            old_x = test_dataset.get_data()[0]
-            old_y = test_dataset.get_data()[1]
+    strategy.train_scenario = ClassIncremental(
+        train_dataset,
+        increment=args.classes_per_exp + args.extra_classes,
+        class_order=class_order,
+        transformations=transform_1)
 
-            #####################################################################
-            #                 ATTENZIONE! Problema da risolvere                 #
-            #####################################################################
-            for i in range(args.n_experiences * args.extra_classes):
-                new_y.append(200 + i)
-                new_x.append(old_x[0])
-            #####################################################################
+    '''strategy.test_scenario = ClassIncremental(
+        test_dataset,
+        increment=args.classes_per_exp + args.extra_classes,
+        class_order=class_order,
+        transformations=transform_2)'''
 
-            for i in range(len(old_y)):
-                new_y.append(old_y[i])
-                # new_y.append(old_y[i] + 100)
-                new_x.append(old_x[i])
-                # new_x.append(np.rot90(old_x[i], 2))
-            new_x = np.array(new_x)
-            new_y = np.array(new_y)
-            test_dataset = InMemoryDataset(new_x, new_y)
-
-            strategy.train_scenario = ClassIncremental(
-                train_dataset,
-                increment=args.classes_per_exp + args.extra_classes,
-                class_order=class_order,
-                transformations=default_transforms_Synbols)
-        else:
-            old_x = train_dataset.get_data()[0]
-            old_y = train_dataset.get_data()[1]
-            permutazione = sorted(range(len(old_y)), key=lambda i: old_y[i])
-            new_x = old_x[permutazione]
-            new_y = old_y[permutazione]
-            train_dataset = InMemoryDataset(new_x, new_y)
-
-            strategy.train_scenario = ClassIncremental(
-                train_dataset,
-                increment=args.classes_per_exp,
-                class_order=class_order,
-                transformations=default_transforms_Synbols)
-
-        if args.extra_classes > 0:
-            inc = args.classes_per_exp + args.extra_classes
-        else:
-            inc = args.classes_per_exp
-
-        tra = to_tensor_and_normalize_Synbols
-
-        strategy.test_scenario = ClassIncremental(
-            test_dataset,
-            increment=inc,
-            class_order=class_order,
-            transformations=tra)
-        strategy.test_scenario_2 = ClassIncremental(
-            test_dataset,
-            increment=inc,
-            class_order=class_order,
-            transformations=to_tensor_and_normalize_Synbols)
-
-
+    strategy.test_scenario = ClassIncremental(
+        test_dataset,
+        increment=args.classes_per_exp + args.extra_classes,
+        class_order=class_order,
+        transformations=transform_2)
 
     print(f"Number of classes: {strategy.train_scenario.nb_classes}.")
     print(f"Number of tasks: {strategy.train_scenario.nb_tasks}.")
@@ -473,7 +178,7 @@ def main():
         if len(strategy.val_taskset):
             strategy.val_dataloader = DataLoader(strategy.val_taskset, batch_size=args.bsize, shuffle=True)
         else:
-            strategy.val_dataloader = DataLoader(strategy.test_scenario_2[i], batch_size=args.bsize, shuffle=True)
+            strategy.val_dataloader = DataLoader(strategy.test_scenario[i], batch_size=args.bsize, shuffle=True)
 
         #################### TRAIN ###########################
 

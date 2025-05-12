@@ -151,10 +151,7 @@ class GatedCifarResNet(nn.Module):
         #expansion = block.expansion
 
         self.out_dim = 64 * block.expansion
-        if args.extra_classes == 0:
-            self.fc = GatedLinear(64*expansion, classes_out, bias=False)
-        else:
-            self.fc = GatedLinear(64 * expansion, classes_out+args.extra_classes*args.n_experiences, bias=False)
+        self.fc = GatedLinear(64 * expansion, classes_out+args.extra_classes*args.n_experiences, bias=False)
         self.output_mask = {}
         self.exp_idx = -1
         self.bn_weights = {}
@@ -231,10 +228,7 @@ class GatedCifarResNet(nn.Module):
     def set_output_mask(self, exp_idx, classes_in_this_exp):
         # set zero to all the output neurons that are not in this experience
         self.exp_idx = exp_idx
-        if args.extra_classes == 0:
-            self.output_mask[exp_idx] = torch.nn.functional.one_hot( torch.tensor(classes_in_this_exp), num_classes=OPT.n_classes).sum(dim=0).float().to(OPT.device)
-        else:
-            self.output_mask[exp_idx] = torch.nn.functional.one_hot(torch.tensor(classes_in_this_exp),num_classes=OPT.n_classes+args.extra_classes*args.n_experiences).sum(dim=0).float().to(OPT.device)
+        self.output_mask[exp_idx] = torch.nn.functional.one_hot(torch.tensor(classes_in_this_exp),num_classes=OPT.n_classes+args.extra_classes*args.n_experiences).sum(dim=0).float().to(OPT.device)
 
     def save_bn_params(self, task_id):
         """Save the BN weights of the model in a dict"""

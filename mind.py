@@ -43,11 +43,6 @@ class MIND():
         self.confusion_mat_task = torch.zeros((args.n_experiences, args.n_experiences))
         self.forgetting_mat = torch.zeros((args.n_experiences, args.n_experiences))
 
-    '''def get_ce_loss2(self):
-        out = self.mb_output[:, torch.nonzero(self.model.output_mask[self.experience_idx])].squeeze(-1)
-        return self.criterion(out, self.mb_y.to(args.device)-(self.experience_idx*10))'''
-
-
     def get_ce_loss(self):
         """ Cross entropy loss. """
         return self.criterion(self.mb_output, self.mb_y.to(args.device))

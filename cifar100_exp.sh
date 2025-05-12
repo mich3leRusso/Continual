@@ -14,7 +14,7 @@ source /archive/apps/miniconda/miniconda3/py312_2/etc/profile.d/conda.sh
 # Conda activate
 conda activate env_9
 
-for seed in 0 1 2 3 4 5 6 7 8 9;
+for seed in 0 #1 2 3 4 5 6 7 8 9;
 #mode = 0 baseline, 3 controllo, 4 CSI
 do
     python /davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/main.py --run_name "Refactoring" \
@@ -23,10 +23,10 @@ do
             --seed $seed \
             --n_experiences 10 \
             --model "gresnet32" \
-            --epochs 50 \
+            --epochs 20 \
             --lr 0.005 \
             --scheduler 35 \
-            --epochs_distillation 50 \
+            --epochs_distillation 20 \
             --lr_distillation 0.035 \
             --scheduler_distillation 40 \
             --temperature 6.5 \
