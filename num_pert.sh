@@ -18,7 +18,7 @@ conda activate env_9
 python /davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/test_time_data_augmentation.py --run_name "cifar100_CSIx3" \
         --dataset "CIFAR100" \
         --cuda 0 \
-        --seed 1 \
+        --seed 9 \
         --n_experiences 10 \
         --model "gresnet32" \
         --temperature 6.5 \

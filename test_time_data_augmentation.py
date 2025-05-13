@@ -42,7 +42,6 @@ def get_stat_exp(y, y_hats, exp_idx, task_id, task_predictions):
 
         print(f"EXP:{i}, acc:{acc:.3f}, task:{conf_mat[i,i]:.3f}, distrib:{[round(conf_mat[i,j].item(), 3) for j in range(exp_idx+1)]}")
 
-
 def entropy(vec):
     return -torch.sum(vec * torch.log(vec + 1e-7), dim=1)
 
@@ -58,7 +57,7 @@ setup_logger()
 acc_ = []
 taw_ = []
 num_exp = args.n_aug + 1  #perchè il primo valore è la baseline
-for seed in range(10):
+for seed in range(args.seed+1):
     set_seed(seed)
     file_name = args.run_name[:-2]+f"_{seed}"
     print(file_name)
@@ -273,6 +272,7 @@ for seed in range(10):
     taw_mean = np.mean(np.array(taw_).T, axis=1)
     taw_std = np.std(np.array(taw_).T, axis=1)
 
-    point_of_interest = [0, int(args.n_aug/2), args.n_aug]
-    for p in point_of_interest:
+    #points_of_interest = [0, int(args.n_aug/2), args.n_aug]
+    points_of_interest = range(args.n_aug + 1)
+    for p in points_of_interest:
         print(f"number of augmentation = {p},     TAG = {tag_mean[p]*100:.2f} ± {tag_std[p]*100:.2f},    TAW = {taw_mean[p]*100:.2f} ± {taw_std[p]*100:.2f}")

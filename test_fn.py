@@ -131,7 +131,6 @@ def test(strategy, test_set, plot=True):
         res['y'] = y.cpu().numpy()
         res['y_hats'] = y_hats.cpu().numpy()
         res['frag_preds'] = frag_preds.cpu().numpy()
-        res['entropy_frag'] = entropy_frag.cpu().numpy()
         res['y_taw'] = y_taw.cpu().numpy()
 
         # write to file

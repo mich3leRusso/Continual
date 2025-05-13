@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#PBS -N cifar100_CSIx2
+#PBS -N cifar100_CA2_R1
 #PBS -o exp.txt
 #PBS -q gpu
 #PBS -e exp.txt
@@ -14,21 +14,41 @@ source /archive/apps/miniconda/miniconda3/py312_2/etc/profile.d/conda.sh
 # Conda activate
 conda activate env_9
 
-for seed in 0 #1 2 3 4 5 6 7 8 9;
-#mode = 0 baseline, 3 controllo, 4 CSI
-do
-    python /davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/main.py --run_name "Refactoring" \
-            --dataset "CIFAR100" \
-            --cuda 0 \
-            --seed $seed \
-            --n_experiences 10 \
-            --model "gresnet32" \
-            --epochs 50 \
-            --lr 0.005 \
-            --scheduler 35 \
-            --epochs_distillation 50 \
-            --lr_distillation 0.035 \
-            --scheduler_distillation 40 \
-            --temperature 6.5 \
-            --class_augmentation 2
-done
+class_augmentation=2  #multiplier of the number of classes
+rotations=1           #1 if we want to include test time data augmentation, 0 otherwise
+n_aug=4               #maximal number of test time data augmentation in which we are interested in
+train_model=0         #0 if the model have already been trained and do not want to train it again
+n_seed=1              #number of seeds in which we train each experiment
+
+run_name="cifar100_CA${class_augmentation}"
+
+if [ "$train_model" -eq 1 ]; then
+  for seed in $(seq 0 $((n_seed-1)))
+  do
+      python /davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/main.py --run_name $run_name \
+              --dataset "CIFAR100" \
+              --cuda 0 \
+              --seed $seed \
+              --n_experiences 10 \
+              --model "gresnet32" \
+              --epochs 2 \
+              --lr 0.005 \
+              --scheduler 35 \
+              --epochs_distillation 2 \
+              --lr_distillation 0.035 \
+              --scheduler_distillation 40 \
+              --temperature 6.5 \
+              --class_augmentation $class_augmentation
+  done
+fi
+
+python /davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/test_time_data_augmentation.py --run_name $run_name \
+        --dataset "CIFAR100" \
+        --cuda 0 \
+        --seed $((n_seed-1))\
+        --n_experiences 10 \
+        --model "gresnet32" \
+        --temperature 6.5 \
+        --class_augmentation $class_augmentation \
+        --with_rotations $rotations \
+        --n_aug $n_aug
