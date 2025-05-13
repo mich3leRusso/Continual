@@ -21,6 +21,8 @@ def get_args():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--control", type=int, default=0)
     parser.add_argument("--class_augmentation", type=int, default=1)
+    parser.add_argument("--with_rotations", type=int, default=0)
+    parser.add_argument("--n_aug", type=int, default=0)
 
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--val_split", type=float, default=0.0)

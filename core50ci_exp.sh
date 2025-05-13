@@ -23,10 +23,10 @@ do
             --seed $seed \
             --n_experiences 10 \
             --model "gresnet32" \
-            --epochs 2 \
+            --epochs 20 \
             --lr 0.005 \
             --scheduler 15 \
-            --epochs_distillation 2 \
+            --epochs_distillation 20 \
             --lr_distillation 0.035 \
             --scheduler_distillation 15 \
             --temperature 3 \

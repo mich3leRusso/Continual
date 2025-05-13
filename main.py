@@ -28,7 +28,9 @@ import numpy as np
 from time import time
 
 def main():
-    data_path = os.path.expanduser('/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/data_64x64')
+    #data_path = os.path.expanduser('/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/data_64x64')
+    project_path = '/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND'
+    data_path = project_path + '/data'
 
     # set seed
     set_seed(args.seed)
@@ -53,9 +55,9 @@ def main():
         raise ValueError("Model not found.")
 
     if args.load_model_from_run:
-        model.load_state_dict(torch.load(f"/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/logs/{args.load_model_from_run}/checkpoints/weights.pt"))
+        model.load_state_dict(torch.load(project_path + f"/logs/{args.load_model_from_run}/checkpoints/weights.pt"))
         # load bn weights as pkles 
-        bn_weights = pkl.load(open(f"/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/logs/{args.load_model_from_run}/checkpoints/bn_weights.pkl", "rb"))
+        bn_weights = pkl.load(open(project_path + f"/logs/{args.load_model_from_run}/checkpoints/bn_weights.pkl", "rb"))
         model.bn_weights = bn_weights
 
     model.to(args.device)
@@ -68,17 +70,17 @@ def main():
         transform_1 = default_transforms
         transform_2 = to_tensor_and_normalize
     elif args.dataset == 'CORE50_CI':
-        data_path = os.path.expanduser('/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/data_64x64/core50_128x128')
+        data_path = os.path.expanduser(data_path + '/core50_128x128')
         train_dataset, test_dataset = get_all_core50_data(data_path, args.n_experiences, split=0.8)
         transform_1 = default_transforms_core50
         transform_2 = to_tensor_and_normalize_core50
     elif args.dataset == 'TinyImageNet':
-        data_path = os.path.expanduser('/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/data_64x64')
+        data_path = os.path.expanduser(data_path)
         train_dataset, test_dataset = get_all_tinyImageNet_data(data_path, args.n_experiences)
         transform_1 = default_transforms_TinyImageNet
         transform_2 = to_tensor_and_normalize_TinyImageNet
     elif args.dataset == 'Synbols':
-        train_data, test_data = get_synbols_data('/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/data_64x64', n_tasks=args.n_experiences)
+        train_data, test_data = get_synbols_data(data_path, n_tasks=args.n_experiences)
         train_dataset = InMemoryDataset(*train_data).get_data()
         test_dataset = InMemoryDataset(*test_data).get_data()
         transform_1 = default_transforms_Synbols
@@ -144,12 +146,6 @@ def main():
         class_order=class_order,
         transformations=transform_1)
 
-    '''strategy.test_scenario = ClassIncremental(
-        test_dataset,
-        increment=args.classes_per_exp + args.extra_classes,
-        class_order=class_order,
-        transformations=transform_2)'''
-
     strategy.test_scenario = ClassIncremental(
         test_dataset,
         increment=args.classes_per_exp + args.extra_classes,
@@ -160,7 +156,7 @@ def main():
     print(f"Number of tasks: {strategy.train_scenario.nb_tasks}.")
 
     if args.load_model_from_run:
-        strategy.pruner.masks = torch.load(f"/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/logs/{args.load_model_from_run}/checkpoints/masks.pt")
+        strategy.pruner.masks = torch.load(project_path + f"//logs/{args.load_model_from_run}/checkpoints/masks.pt")
 
     for i, train_taskset in enumerate(strategy.train_scenario):
         if args.packnet_original:
@@ -220,7 +216,6 @@ def main():
             with torch.no_grad():
                 strategy.pruner.prune(strategy.model, strategy.experience_idx, strategy.distill_model, args.self_distillation)
 
-
         strategy.train_epochs = args.epochs_distillation
         strategy.distillation = True
         strategy.optimizer = torch.optim.AdamW(strategy.model.parameters(), lr=args.lr_distillation, weight_decay=args.wd_distillation)
@@ -233,8 +228,6 @@ def main():
         # concatenate pytorch datasets up to the current experience
         with torch.no_grad():
             # write accuracy on the test set
-            total_acc = 0
-            task_acc = 0
             total_acc, task_acc, accuracy_taw = test(strategy, strategy.test_scenario[:i+1])
 
         #with open(f"/davinci-1/home/dmor/PycharmProjects/MIND/logs/{args.run_name}/results/total_acc.csv", "a") as f:
@@ -244,20 +237,11 @@ def main():
 
         # save the model and the masks
         if not args.load_model_from_run:
-            os.makedirs(os.path.dirname(f"/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/logs/{args.run_name}/checkpoints/weights.pt"), exist_ok=True)
-            torch.save(strategy.model.state_dict(), f"/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/logs/{args.run_name}/checkpoints/weights.pt")
-            torch.save(strategy.pruner.masks, f"/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/logs/{args.run_name}/checkpoints/masks.pt")
-            pkl.dump(strategy.model.bn_weights, open(f"/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/logs/{args.run_name}/checkpoints/bn_weights.pkl", "wb"))
+            os.makedirs(os.path.dirname(project_path + f"/logs/{args.run_name}/checkpoints/weights.pt"), exist_ok=True)
+            torch.save(strategy.model.state_dict(), project_path + f"/logs/{args.run_name}/checkpoints/weights.pt")
+            torch.save(strategy.pruner.masks, project_path + f"/logs/{args.run_name}/checkpoints/masks.pt")
+            pkl.dump(strategy.model.bn_weights, open(project_path + f"/logs/{args.run_name}/checkpoints/bn_weights.pkl", "wb"))
 
-    # push results to excel
-    #unpublished = True
-    #while unpublished:
-    #    try:
-    #        push_results(args, total_acc, task_acc, accuracy_taw)
-    #        unpublished = False
-    #    except:
-    #        "Failed to push results, retrying in 1s"
-    #        time.sleep(1)
 
 if __name__ == "__main__":
 

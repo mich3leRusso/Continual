@@ -21,12 +21,12 @@ do
             --dataset "Synbols" \
             --cuda 0 \
             --seed $seed \
-            --n_experiences 10 \
+            --n_experiences 25 \
             --model "gresnet32" \
-            --epochs 5 \
+            --epochs 10 \
             --lr 0.005 \
             --scheduler 10 20 \
-            --epochs_distillation 5 \
+            --epochs_distillation 25 \
             --lr_distillation 0.035 \
             --scheduler_distillation 15 \
             --temperature 4 \

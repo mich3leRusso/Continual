@@ -15,7 +15,7 @@ source /archive/apps/miniconda/miniconda3/py312_2/etc/profile.d/conda.sh
 conda activate env_9
 
 
-python /davinci-1/home/dmor/PycharmProjects/MIND/num_pert_2.py --run_name "cifar100_CSIx3" \
+python /davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/test_time_data_augmentation.py --run_name "cifar100_CSIx3" \
         --dataset "CIFAR100" \
         --cuda 0 \
         --seed 1 \
@@ -23,7 +23,6 @@ python /davinci-1/home/dmor/PycharmProjects/MIND/num_pert_2.py --run_name "cifar
         --model "gresnet32" \
         --temperature 6.5 \
         --mode 4 \
-        --extra_classes 20 \
-        --aug_inf 1 \
-        --num_aug 100 \
-        --dropout 0.0
+        --class_augmentation 3 \
+        --with_rotations 1 \
+        --n_aug 2
