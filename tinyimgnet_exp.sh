@@ -17,7 +17,7 @@ conda activate MIND
 
 
 
-for seed in 0 1 2 3 4 5 6 7 8 9;
+for seed in 0 ;
 do
     python /davinci-1/home/micherusso/PycharmProjects/MIND_real/main.py --run_name "tinyimgnet_experiment" \
             --dataset "TinyImageNet" \
