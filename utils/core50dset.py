@@ -27,6 +27,7 @@ class Core50Dataset(Dataset):
 
         # Shuffle the lists in unison
         combined = list(zip(self.paths, self.labels))
+
         random.shuffle(combined)
         self.paths, self.labels = zip(*combined)
 
@@ -64,6 +65,7 @@ def get_all_core50_data(path, n_tasks, split):
     """ Retrieve all paths and labels and shuffle them"""
     dset = Core50Dataset(path, 0)
 
+
     tmp = np.arange(50)
     np.random.shuffle(tmp)
 
@@ -76,7 +78,7 @@ def get_all_core50_data(path, n_tasks, split):
 
     #per ciascun task
     for tid, obj_group in enumerate(tasks):
-
+ 
         # remap labels obj_group to tid*10
 
         task_data = []

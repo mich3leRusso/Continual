@@ -45,9 +45,9 @@ to_tensor_and_normalize = [
 
 
 default_transforms_core50 = [
-        #transforms.RandomCrop(128, padding=16),
+
         transforms.RandomCrop(64, padding=4),
-        #transforms.RandomGrayscale(p=0.5),
+
         transforms.RandomHorizontalFlip(),
         transforms.ColorJitter(brightness=.5,hue=.3),
         transforms.ToTensor(),
@@ -55,6 +55,16 @@ default_transforms_core50 = [
             (0.5998523831367493, 0.5575963854789734, 0.5395311713218689), (0.20457075536251068, 0.2166813313961029, 0.22945666313171387)
         ),
     ]
+
+expansion_transforms_core50 = transforms.Compose([
+    transforms.RandomCrop(64, padding=4),
+    transforms.RandomHorizontalFlip(),
+    transforms.ColorJitter(brightness=0.5, hue=0.3),
+    transforms.Normalize(
+        (0.5998523831367493, 0.5575963854789734, 0.5395311713218689),
+        (0.20457075536251068, 0.2166813313961029, 0.22945666313171387)
+    ),
+])
 
 to_tensor_and_normalize_core50 = [
         transforms.ToTensor(),
@@ -100,7 +110,12 @@ default_transforms_Synbols = [
         )
         ]
 
-
+expansion_transforms_synbols = transforms.Compose([
+    transforms.RandomHorizontalFlip(),
+    transforms.Normalize(
+        (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
+    ),
+])
 
 
 to_tensor_and_normalize_Synbols = [

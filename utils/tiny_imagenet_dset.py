@@ -88,6 +88,7 @@ class tinyImageNetDataset(Dataset):
 
 
 def get_all_tinyImageNet_data(path, n_tasks):
+
     """ Retrieve all paths and labels and shuffle them"""
     #path to dataset 
     dset = tinyImageNetDataset(path, train= True)
@@ -121,6 +122,7 @@ def get_all_tinyImageNet_data(path, n_tasks):
     #collect from val
     images = []
     labels= []
+
     for index in range(dset_test.__len__()):
         out = dset_test.__getitem__(index)
         images.append(out[0])
@@ -136,12 +138,13 @@ def get_all_tinyImageNet_data(path, n_tasks):
         task_lbl = []
         task_tlbl = []
         
-        cnt=0
+        cnt=0 #contatore all'interno, obj ha valori distinti
         for oid in obj_group:
             
             index = np.where(y==oid)
             # stack all images in a single tensor
             y_buff = np.zeros_like(y[index])+cnt+(tid*200/n_tasks)
+
             x_buff = x[index]
             t = np.ones_like(y_buff)*tid
 

@@ -8,10 +8,11 @@ import shutil
 ## IMPORTANT READ THIS BEFORE RUNNING THIS SCRIPT ###
 
 
-PATH_DATASET = '/data/core50_128x128/*'
+
+PATH_DATASET = '/davinci-1/home/micherusso/PycharmProjects/MIND_real/data/core50_128x128/*'
 
 
-shutil.copytree(PATH_DATASET[:-1], '/data/core50_64x64/')
+shutil.copytree(PATH_DATASET[:-1], '/davinci-1/home/micherusso/PycharmProjects/MIND_real/data/core50_64x64/')
 
 list_folder = glob.glob(PATH_DATASET)
 print(list_folder, len(list_folder))

@@ -151,7 +151,7 @@ class GatedCifarResNet(nn.Module):
         self.out_dim = 64 * block.expansion
         #add one more dimension for unk
 
-        self.fc = GatedLinear(64*expansion, classes_out+10, bias=False)
+        self.fc = GatedLinear(64*expansion, classes_out+OPT.n_experiences, bias=False)
         self.output_mask = {}
         self.exp_idx = -1
         self.bn_weights = {}
@@ -192,7 +192,7 @@ class GatedCifarResNet(nn.Module):
         x_3 = self.stage_3(x_2)  # [bs, 64, 8, 8]
 
         pooled = self.avgpool(x_3)  # [bs, 64, 1, 1]
-        features = pooled.view(pooled.size(0), -1)  # [bs, 64]
+        features = pooled.reshape(pooled.size(0), -1)  # [bs, 64]
 
         # return {
         #     'fmaps': [x_1, x_2, x_3],
@@ -211,7 +211,7 @@ class GatedCifarResNet(nn.Module):
         x_3 = self.stage_3(x_2)  # [bs, 64, 8, 8]
 
         pooled = self.avgpool(x_3)  # [bs, 64, 1, 1]
-        features = pooled.view(pooled.size(0), -1)  # [bs, 64]
+        features = pooled.reshape(pooled.size(0), -1)  # [bs, 64]
 
         # return {
         #     'fmaps': [x_1, x_2, x_3],
@@ -232,13 +232,14 @@ class GatedCifarResNet(nn.Module):
         # creates the one hot encorde for each task in this experience
         #append class unk
         classes_in_this_exp=np.append(classes_in_this_exp, OPT.n_classes+exp_idx)
-        mask=torch.nn.functional.one_hot( torch.tensor(classes_in_this_exp), num_classes=OPT.n_classes+10).sum(dim=0).float().to(OPT.device)
+        mask=torch.nn.functional.one_hot( torch.tensor(classes_in_this_exp), num_classes=OPT.n_classes+OPT.n_experiences).sum(dim=0).float().to(OPT.device)
 
 
         #add one more dimension in the end that represents the UNK mask
         #mask=torch.cat([mask, torch.tensor([1.0], device=mask.device)])
 
         self.output_mask[exp_idx] = mask
+
     def save_bn_params(self, task_id):
         """Save the BN weights of the model in a dict"""
         bn_params = []

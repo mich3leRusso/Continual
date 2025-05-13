@@ -18,7 +18,7 @@ conda activate MIND
 
 
 
-for seed in   9 ;
+for seed in   8 9 ;
 do
     python /davinci-1/home/micherusso/PycharmProjects/MIND_real/main2.py --run_name "core50_experiment" \
             --dataset "CORE50_CI" \
