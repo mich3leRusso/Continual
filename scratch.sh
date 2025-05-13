@@ -17,7 +17,7 @@ conda activate MIND
 
 
 
-for seed in  8 9;
+for seed in 3 4 5;
 do
     python /davinci-1/home/micherusso/PycharmProjects/MIND_real/main.py --run_name "tinyimgnet_experiment" \
             --dataset "TinyImageNet" \
@@ -31,6 +31,7 @@ do
             --epochs_distillation 120 \
             --lr_distillation 0.035 \
             --scheduler_distillation 80 110 \
-            --temperature 12 \
-            --sweep 70
+            --temperature 5 7 10 12 \
+            --sweep 90 \
+            --load_model_from_run "tinyimgnet_experiment"
 done
