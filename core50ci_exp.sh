@@ -26,7 +26,7 @@ if [ "$train_model" -eq 1 ]; then
   for seed in $(seq 0 $((n_seed-1)))
   do
       python /davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/main.py --run_name $run_name \
-              --dataset "TinyImageNet" \
+              --dataset "CORE50_CI" \
               --cuda 0 \
               --seed $seed \
               --n_experiences 10 \
@@ -43,7 +43,7 @@ if [ "$train_model" -eq 1 ]; then
 fi
 
 python /davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/test_time_data_augmentation.py --run_name $run_name \
-        --dataset "TinyImageNet" \
+        --dataset "CORE50_CI" \
         --cuda 0 \
         --seed $((n_seed-1))\
         --n_experiences 10 \

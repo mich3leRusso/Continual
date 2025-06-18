@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#PBS -N cifar100_CA2_R1
+#PBS -N cifar_100_control_2_CA2_rot
 #PBS -o exp.txt
 #PBS -q gpu
 #PBS -e exp.txt
@@ -14,13 +14,24 @@ source /archive/apps/miniconda/miniconda3/py312_2/etc/profile.d/conda.sh
 # Conda activate
 conda activate env_9
 
-class_augmentation=2  #multiplier of the number of classes
-rotations=1           #1 if we want to include test time data augmentation, 0 otherwise
-n_aug=4               #maximal number of test time data augmentation in which we are interested in
-train_model=0         #0 if the model have already been trained and do not want to train it again
-n_seed=1              #number of seeds in which we train each experiment
+class_augmentation=3  #multiplier of the number of classes
+rotations=0            #1 if we want to include test time data augmentation, 0 otherwise
+n_aug=20             #maximal number of test time data augmentation in which we are interested in
+train_model=0          #0 if the model have already been trained and do not want to train it again
+n_seed=10              #number of seeds in which we train each experiment
+control=0            #use the rotations as positive examples instead of using them as negative examples
+control_2=0          #do not use augmented classes but train them anyway
+control_ttda=0       #do not use the augmentations in training phase
 
-run_name="cifar100_CA${class_augmentation}"
+if [ "$control" -eq 1 ]; then
+  run_name="cifar100_control_CA${class_augmentation}"
+elif [ "$control_ttda" -eq 2 ]; then
+  run_name="cifar100_control_ttda${control_ttda}_CA${class_augmentation}"
+elif [ "$control_2" -eq 2 ]; then
+  run_name="cifar100_control_bis_CA${class_augmentation}"
+else
+  run_name="cifar100_CA${class_augmentation}"
+fi
 
 if [ "$train_model" -eq 1 ]; then
   for seed in $(seq 0 $((n_seed-1)))
@@ -31,16 +42,20 @@ if [ "$train_model" -eq 1 ]; then
               --seed $seed \
               --n_experiences 10 \
               --model "gresnet32" \
-              --epochs 2 \
+              --epochs 50 \
               --lr 0.005 \
               --scheduler 35 \
-              --epochs_distillation 2 \
+              --epochs_distillation 50 \
               --lr_distillation 0.035 \
               --scheduler_distillation 40 \
               --temperature 6.5 \
-              --class_augmentation $class_augmentation
+              --class_augmentation $class_augmentation \
+              --control $control \
+              --control_ttda $control_ttda
   done
 fi
+
+n_seed=10
 
 python /davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/test_time_data_augmentation.py --run_name $run_name \
         --dataset "CIFAR100" \
@@ -51,4 +66,6 @@ python /davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/test_time_data_augm
         --temperature 6.5 \
         --class_augmentation $class_augmentation \
         --with_rotations $rotations \
-        --n_aug $n_aug
+        --n_aug $n_aug \
+        --control $control \
+        --control_2 $control_2

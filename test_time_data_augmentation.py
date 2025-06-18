@@ -45,9 +45,8 @@ def get_stat_exp(y, y_hats, exp_idx, task_id, task_predictions):
 def entropy(vec):
     return -torch.sum(vec * torch.log(vec + 1e-7), dim=1)
 
-#data_path = os.path.expanduser('/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/data_64x64')
-project_path = '/davinci-1/home/dmor/PycharmProjects/MIND'
-data_path = project_path + '/data'
+project_path = '/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND'
+data_path = '/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/data'
 
 model = gresnet32(dropout_rate = args.dropout)
 
@@ -58,7 +57,9 @@ acc_ = []
 taw_ = []
 num_exp = args.n_aug + 1  #perchè il primo valore è la baseline
 for seed in range(args.seed+1):
+
     set_seed(seed)
+
     file_name = args.run_name[:-2]+f"_{seed}"
     print(file_name)
     model.load_state_dict(torch.load(project_path + f"/logs/{file_name}/checkpoints/weights.pt"))
@@ -92,15 +93,40 @@ for seed in range(args.seed+1):
 
     r = args.class_augmentation - 1
 
-    if (args.dataset == 'CIFAR100') | (args.dataset == 'TinyImageNet'):
+    if (args.dataset == 'CIFAR100') | (args.dataset == 'Synbols'):
         class_order = list(range(args.n_classes))
         random.shuffle(class_order)
         class_order_ = []
         for t in range(args.n_experiences):
-            for k in range(r + 1):
+            for k in range(r*(1-args.control) + 1):
                 for c in range(args.classes_per_exp):
-                    class_order_.append(class_order[t * args.classes_per_exp + c] + args.n_classes * k)
+                    class_order_.append(class_order[t * args.classes_per_exp + c] + args.n_classes * k )
         class_order = class_order_
+
+    # modifying train set
+    new_y = []
+    new_x = []
+    old_x = train_dataset[0]
+    old_y = train_dataset[1]
+    for i in range(len(old_y)):
+        for k in range(r + 1):
+            new_y.append(old_y[i] + args.n_classes * k * (1-args.control))
+            new_x.append(np.rot90(old_x[i], k))
+    new_x = np.array(new_x)
+    new_y = np.array(new_y)
+
+    if (args.dataset == 'CORE50_CI') | (args.dataset == 'TinyImageNet'):
+        new_z = []
+        old_z = train_dataset[2]
+        for i in range(old_x.shape[0]):
+            for k in range(r + 1):
+                new_z.append(old_z[i])
+        new_z = np.array(new_z)
+        class_order = []
+        for i in range(args.n_experiences):
+            classes_in_task = np.unique(new_y[new_z == i])
+            for j in range(len(classes_in_task)):
+                class_order.append(int(classes_in_task[j]))
 
     # modifying test set
     new_y = []
@@ -116,13 +142,6 @@ for seed in range(args.seed+1):
     new_x = np.array(new_x)
     new_y = np.array(new_y)
     test_dataset = InMemoryDataset(new_x, new_y)
-
-    if (args.dataset == 'CORE50_CI') | (args.dataset == 'Synbols'):
-        class_order = []
-        for i in range(args.n_experiences):
-            classes_in_task = np.unique(new_y[new_z == i])
-            for j in range(len(classes_in_task)):
-                class_order.append(int(classes_in_task[j]))
 
     strategy.test_scenario = ClassIncremental(
         test_dataset,
@@ -151,32 +170,41 @@ for seed in range(args.seed+1):
         dataloader = DataLoader(test_set, batch_size=1000, shuffle=False, num_workers=8)
 
         hist_1 = []
-        if args.extra_classes == 0:
-            num_rot = 1
-        else:
-            num_rot = int(args.extra_classes/args.classes_per_exp)+1
+        hist_2 = []
+
+        num_rot = args.class_augmentation
 
         if args.with_rotations == 0:
             num_rot = 1
 
+        '''mean_t = []
+        std_t = []
+        mean_f = []
+        std_f = []
+        mean_e = []
+        std_e = []'''
         for k in range(num_exp): #run sulle varie aumentazioni
             print(f"augmentation_number = {k}")
-            rot = k % num_rot
-
-            if args.extra_classes > 0:
-                s = args.n_classes + int(args.extra_classes * args.n_experiences)
-                confusion_mat = torch.zeros((s, s))
-                confusion_mat_taw = torch.zeros((s, s))
+            if k==0:
+                rot=0
             else:
-                confusion_mat = torch.zeros((args.n_classes, args.n_classes))
-                confusion_mat_taw = torch.zeros((args.n_classes, args.n_classes))
+                rot = (k-1) % num_rot
+
+            s = args.n_classes + int(args.extra_classes * args.n_experiences)
+            confusion_mat = torch.zeros((s, s))
+            confusion_mat_taw = torch.zeros((s, s))
+
+            confusion_mat_aux = torch.zeros((int(s/args.class_augmentation), s))
 
             y_hats = []
             y_taw = []
             ys = []
             task_ids = []
+            aux_ = []
+            logits = []
             for i, (x, y, task_id) in enumerate(dataloader):
                 frag_preds = []
+                frag_preds_aux = []
                 for j in range(strategy.experience_idx + 1):
                     # create a temporary model copy
                     model = freeze_model(deepcopy(strategy.model))
@@ -185,10 +213,17 @@ for seed in range(args.seed+1):
                     model.load_bn_params(j)
                     model.exp_idx = j
 
-                    if k != 0:
+                    if k > 0: ##################################################################
                         trans = transforms.Compose(transform_0)
                     else:
                         trans = transforms.Compose(transform_1)
+
+                    if args.with_rotations==1:
+                        p = int((k % (args.n_aug * args.class_augmentation))/args.class_augmentation)%2
+                    else:
+                        p = (k+1)%2
+
+                    trans2 = transforms.RandomHorizontalFlip(p=p)
 
                     x_ = []
                     for img in x:
@@ -199,31 +234,47 @@ for seed in range(args.seed+1):
                             img = np.rot90(img.transpose(2, 1, 0), rot).transpose(2, 1, 0)
                         img = torch.tensor(img.copy())
                         new_img = trans(img)
+                        new_img = trans2(new_img)
                         x_.append(new_img)
                     x_2 = torch.stack(x_)
                     pred = model(x_2.to(args.device))
 
-
                     pred = pred[:, j * (args.classes_per_exp + args.extra_classes): (j + 1) * (args.classes_per_exp + args.extra_classes)]
 
                     # removing scores associated with extra classes
-                    sp = torch.softmax(pred / args.temperature, dim=1)
-                    sp = sp[:, args.classes_per_exp*rot:args.classes_per_exp*(rot+1)]
-                    frag_preds.append(torch.softmax(sp / args.temperature, dim=1))
+                    if args.control_2 == 0:
+                        sp = torch.softmax(pred / args.temperature, dim=1)
+                        sp = sp[:, args.classes_per_exp*rot*(1-args.control):args.classes_per_exp*(rot*(1-args.control)+1)]
+                    else:
+                        sp = pred[:, args.classes_per_exp * rot:args.classes_per_exp * (rot + 1)]
+                        sp = torch.softmax(sp / args.temperature, dim=1)
+
+                    #frag_preds.append(torch.softmax(sp / args.temperature, dim=1))
+                    frag_preds.append(sp)
+                    frag_preds_aux.append(pred)
+                    #print(pred.shape)
 
                 frag_preds = torch.stack(frag_preds)  # [n_frag, bsize, n_classes]
+                frag_preds_aux = torch.stack(frag_preds_aux)
 
                 if k == 1:
                     hist_1.append(frag_preds)
+                    hist_2.append(frag_preds_aux)
                 elif k > 1:
                     frag_preds = (frag_preds + hist_1[i]*(k-1))/k
+                    frag_preds_aux = (frag_preds_aux + hist_2[i]*(k-1))/k
                     hist_1[i] = frag_preds
+                    hist_2[i] = frag_preds_aux
 
                 batch_size = frag_preds.shape[1]
 
                 ### select across the top 2 of likelihood the head  with the lowest entropy
                 # buff -> batch_size  x 2, 0-99 val
                 buff = frag_preds.max(dim=-1)[0].argsort(dim=0)[-2:]  # [2, bsize]
+
+                aux = torch.argmax(frag_preds_aux, dim=2).to("cpu")
+                logits.append(frag_preds_aux)
+                aux_.append(aux)
 
                 # buff_entropy ->  2 x batch_size, entropy values
                 indices = torch.arange(batch_size)
@@ -240,17 +291,25 @@ for seed in range(args.seed+1):
             y_taw = torch.cat(y_taw, dim=0).to('cpu')
             task_ids = torch.cat(task_ids, dim=0).to('cpu')
 
+            aux_ = torch.cat(aux_, dim=1).to('cpu')
+            logits = torch.cat(logits, dim=1).to('cpu')
+
             #to filter out the fake elements added before
             a = y%(args.classes_per_exp + args.extra_classes)
             y = y[a < args.classes_per_exp]
             y_hats = y_hats[a < args.classes_per_exp]
             y_taw = y_taw[a < args.classes_per_exp]
             task_ids = task_ids[a < args.classes_per_exp]
+            aux_ = aux_[:, a < args.classes_per_exp]
 
             # assign +1 to the confusion matrix for each prediction that matches the label
+            print(aux_.shape)
             for i in range(y.shape[0]):
                 confusion_mat[y[i], y_hats[i]] += 1
                 confusion_mat_taw[y[i], y_taw[i]] += 1
+                for j in range(10):
+                    m = int(y[i]/(args.classes_per_exp * args.class_augmentation))
+                    confusion_mat_aux[y[i]-m*(args.classes_per_exp * (args.class_augmentation - 1)), aux_[j, i]+(args.classes_per_exp * args.class_augmentation)*j] += 1
 
             # task confusion matrix and forgetting mat
             for j in range(strategy.experience_idx + 1):
@@ -260,6 +319,48 @@ for seed in range(args.seed+1):
 
             accuracy = confusion_mat.diag().sum() / confusion_mat.sum()
             accuracy_taw = confusion_mat_taw.diag().sum() / confusion_mat_taw.sum()
+
+            if args.control_2 != 1:
+                '''plt.imshow(confusion_mat_aux)
+                plt.colorbar()
+                plt.show()
+
+                true = []
+                false = []
+                external = []
+                for t in range(10):
+                    for img in range(y.shape[0]):
+                        for c in range(args.classes_per_exp):
+                            if t == int(y[img]/args.classes_per_exp):
+                                if c == (y[img]%args.classes_per_exp):
+                                    true.append(logits[t,img,c])
+                                else:
+                                    false.append(logits[t,img,c])
+                            else:
+                                external.append(logits[t,img,c])
+
+                print('\ntrue')
+                print(np.mean(np.array(true)))
+                print(np.mean(np.std(true)))
+
+                print('\nfalse')
+                print(np.mean(np.array(false)))
+                print(np.mean(np.std(false)))
+
+                print('\nexternal')
+                print(np.mean(np.array(external)))
+                print(np.mean(np.std(external)))
+                print('\n')'''
+
+                '''mean_t.append(np.mean(np.array(true)))
+                std_t.append(np.std(np.array(true)))
+
+                mean_f.append(np.mean(np.array(false)))
+                std_f.append(np.std(np.array(false)))
+
+                mean_e.append(np.mean(np.array(external)))
+                std_e.append(np.std(np.array(external)))'''
+                pass
 
             acc.append(accuracy.item())
             taw.append(accuracy_taw.item())
@@ -276,3 +377,12 @@ for seed in range(args.seed+1):
     points_of_interest = range(args.n_aug + 1)
     for p in points_of_interest:
         print(f"number of augmentation = {p},     TAG = {tag_mean[p]*100:.2f} ± {tag_std[p]*100:.2f},    TAW = {taw_mean[p]*100:.2f} ± {taw_std[p]*100:.2f}")
+
+    '''print(mean_t)
+    print(std_t)
+
+    print(mean_f)
+    print(std_f)
+
+    print(mean_e)
+    print(std_e)'''

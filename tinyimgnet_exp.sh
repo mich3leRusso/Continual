@@ -15,12 +15,13 @@ source /archive/apps/miniconda/miniconda3/py312_2/etc/profile.d/conda.sh
 conda activate env_9
 
 class_augmentation=2  #multiplier of the number of classes
-rotations=1           #1 if we want to include test time data augmentation, 0 otherwise
+rotations=0           #1 if we want to include test time data augmentation, 0 otherwise
 n_aug=20              #maximal number of test time data augmentation in which we are interested in
-train_model=1         #0 if the model have already been trained and do not want to train it again
+train_model=0         #0 if the model have already been trained and do not want to train it again
 n_seed=10              #number of seeds in which we train each experiment
 
 run_name="tiny_CA${class_augmentation}"
+run_name="tiny_CSIx2"
 
 if [ "$train_model" -eq 1 ]; then
   for seed in $(seq 0 $((n_seed-1)))

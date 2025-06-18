@@ -10,7 +10,7 @@ from copy import deepcopy
 from utils.generic import freeze_model, set_seed, setup_logger
 from utils.publisher import push_results
 from utils.transforms import to_tensor_and_normalize, default_transforms,default_transforms_core50,\
-    to_tensor_and_normalize_core50,default_transforms_TinyImageNet,to_tensor_and_normalize_TinyImageNet, default_transforms_Synbols,to_tensor_and_normalize_Synbols, to_tensor
+    to_tensor_and_normalize_core50,default_transforms_TinyImageNet,to_tensor_and_normalize_TinyImageNet, default_transforms_Synbols,to_tensor_and_normalize_Synbols, to_tensor, flip_and_normalize
 from torchvision.datasets import CIFAR100
 from torch.utils.data import DataLoader
 from continuum import ClassIncremental
@@ -67,7 +67,12 @@ def main():
     if args.dataset == 'CIFAR100':
         train_dataset = CIFAR100(data_path, download=True, train=True).get_data()
         test_dataset = CIFAR100(data_path, download=True, train=False).get_data()
-        transform_1 = default_transforms
+        if args.control_ttda == 1:
+            transform_1 = to_tensor_and_normalize
+        elif args.control_ttda == 2:
+            transform_1 = flip_and_normalize
+        else:
+            transform_1 = default_transforms
         transform_2 = to_tensor_and_normalize
     elif args.dataset == 'CORE50_CI':
         data_path = os.path.expanduser(data_path + '/core50_128x128')
@@ -88,12 +93,12 @@ def main():
 
     r = args.class_augmentation - 1
 
-    if (args.dataset == 'CIFAR100') | (args.dataset == 'TinyImageNet'):
+    if (args.dataset == 'CIFAR100') | (args.dataset == 'Synbols'):
         class_order = list(range(args.n_classes))
         random.shuffle(class_order)
         class_order_ = []
         for t in range(args.n_experiences):
-            for k in range(r + 1):
+            for k in range(r*(1-args.control) + 1):
                 for c in range(args.classes_per_exp):
                     class_order_.append(class_order[t * args.classes_per_exp + c] + args.n_classes * k)
         class_order = class_order_
@@ -105,12 +110,12 @@ def main():
     old_y = train_dataset[1]
     for i in range(len(old_y)):
         for k in range(r + 1):
-            new_y.append(old_y[i] + args.n_classes * k)
+            new_y.append(old_y[i] + args.n_classes * k * (1-args.control))
             new_x.append(np.rot90(old_x[i], k))
     new_x = np.array(new_x)
     new_y = np.array(new_y)
 
-    if (args.dataset == 'CORE50_CI') | (args.dataset == 'Synbols'):
+    if (args.dataset == 'CORE50_CI') | (args.dataset == 'TinyImageNet'):
         new_z = []
         old_z = train_dataset[2]
         for i in range(old_x.shape[0]):

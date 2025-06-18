@@ -20,6 +20,8 @@ def get_args():
 
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--control", type=int, default=0)
+    parser.add_argument("--control_2", type=int, default=0)
+    parser.add_argument("--control_ttda", type=int, default=0)
     parser.add_argument("--class_augmentation", type=int, default=1)
     parser.add_argument("--with_rotations", type=int, default=0)
     parser.add_argument("--n_aug", type=int, default=0)
@@ -72,7 +74,10 @@ def get_args():
         options.n_experiences = 11
     else:
         options.classes_per_exp = options.n_classes // options.n_experiences
-    options.extra_classes = options.classes_per_exp * (options.class_augmentation - 1)
+    if options.control == 0:
+        options.extra_classes = options.classes_per_exp * (options.class_augmentation - 1)
+    else:
+        options.extra_classes = 0
     print(options)
     return options
 
