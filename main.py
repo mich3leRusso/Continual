@@ -112,6 +112,10 @@ def main():
         for k in range(r + 1):
             new_y.append(old_y[i] + args.n_classes * k * (1-args.control))
             new_x.append(np.rot90(old_x[i], k))
+            #if k == 0:
+            #    new_x.append(np.rot90(old_x[i], k))
+            #else:
+            #    new_x.append(np.rot90(old_x[i], k+old_y[i] % 3))
     new_x = np.array(new_x)
     new_y = np.array(new_y)
 
@@ -175,7 +179,7 @@ def main():
 
         # prepare dataset
         strategy.train_taskset, strategy.val_taskset = split_train_val(train_taskset, val_split=args.val_split)
-        strategy.train_dataloader = DataLoader(strategy.train_taskset, batch_size=args.bsize, shuffle=False)
+        strategy.train_dataloader = DataLoader(strategy.train_taskset, batch_size=args.bsize, shuffle=True)
         if len(strategy.val_taskset):
             strategy.val_dataloader = DataLoader(strategy.val_taskset, batch_size=args.bsize, shuffle=True)
         else:
@@ -208,7 +212,6 @@ def main():
         strategy.optimizer = torch.optim.AdamW(strategy.fresh_model.parameters(), lr=args.lr, weight_decay=args.wd)
         strategy.scheduler = torch.optim.lr_scheduler.MultiStepLR(strategy.optimizer, milestones=args.scheduler, gamma=0.5, last_epoch=-1, verbose=False)
 
-        print(f'-.-.-.-.-.-. Start training on experience {i+1} - epochs: {strategy.train_epochs} .-.-.-.-.-.')
         strategy.train()
 
         # Freeze the model for distillation purposes

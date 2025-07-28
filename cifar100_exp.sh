@@ -1,33 +1,33 @@
 #!/bin/bash
 
-#PBS -N cifar_100_control_2_CA2_rot
+#PBS -N cifar_100_CA4_rot
 #PBS -o exp.txt
 #PBS -q gpu
 #PBS -e exp.txt
 #PBS -k oe
 #PBS -m e
 #PBS -M davide.mor@leonardo.com
-#PBS -l select=1:ngpus=1:ncpus=4,walltime=72:00:00
+#PBS -l select=1:ngpus=1:ncpus=4,walltime=720:00:00
 
 # Add conda to source
 source /archive/apps/miniconda/miniconda3/py312_2/etc/profile.d/conda.sh
 # Conda activate
 conda activate env_9
 
-class_augmentation=3  #multiplier of the number of classes
+class_augmentation=1  #multiplier of the number of classes
 rotations=0            #1 if we want to include test time data augmentation, 0 otherwise
 n_aug=20             #maximal number of test time data augmentation in which we are interested in
 train_model=0          #0 if the model have already been trained and do not want to train it again
 n_seed=10              #number of seeds in which we train each experiment
 control=0            #use the rotations as positive examples instead of using them as negative examples
-control_2=0          #do not use augmented classes but train them anyway
+control_2=0          #do not use augmented classes but train with them anyway
 control_ttda=0       #do not use the augmentations in training phase
 
 if [ "$control" -eq 1 ]; then
   run_name="cifar100_control_CA${class_augmentation}"
-elif [ "$control_ttda" -eq 2 ]; then
+elif [ "$control_ttda" -ne 0 ]; then
   run_name="cifar100_control_ttda${control_ttda}_CA${class_augmentation}"
-elif [ "$control_2" -eq 2 ]; then
+elif [ "$control_2" -eq 1 ]; then
   run_name="cifar100_control_bis_CA${class_augmentation}"
 else
   run_name="cifar100_CA${class_augmentation}"
@@ -68,4 +68,5 @@ python /davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/test_time_data_augm
         --with_rotations $rotations \
         --n_aug $n_aug \
         --control $control \
-        --control_2 $control_2
+        --control_2 $control_2 \
+        --softmax_later 0
