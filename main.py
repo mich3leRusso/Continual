@@ -24,6 +24,7 @@ from utils.tiny_imagenet_dset import get_all_tinyImageNet_data
 from utils.synbols_dset import get_synbols_data
 from continuum.datasets import InMemoryDataset
 from continuum.scenarios import ContinualScenario
+from explainability import run_explainability_tools, SVCCA_starter
 import numpy as np
 from time import time
 
@@ -249,6 +250,16 @@ def main():
             torch.save(strategy.model.state_dict(), project_path + f"/logs/{args.run_name}/checkpoints/weights.pt")
             torch.save(strategy.pruner.masks, project_path + f"/logs/{args.run_name}/checkpoints/masks.pt")
             pkl.dump(strategy.model.bn_weights, open(project_path + f"/logs/{args.run_name}/checkpoints/bn_weights.pkl", "wb"))
+
+        if strategy.experience_idx == 9:
+            # test_teachers(strategy, strategy.test_scenario[:i+1] )
+
+            SVCCA_starter(strategy)
+            input()
+
+            print("Run Explainability")
+
+            run_explainability_tools(strategy)
 
 
 if __name__ == "__main__":

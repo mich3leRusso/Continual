@@ -27,6 +27,8 @@ import numpy as np
 from time import time
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
+from itertools import combinations
+from explainability import run_explainability_tools, SVCCA_starter
 
 def get_stat_exp(y, y_hats, exp_idx, task_id, task_predictions):
 
@@ -178,6 +180,7 @@ for seed in range(args.seed+1):
 
         hist_1 = []
         hist_2 = []
+        hist_3 = []
 
         num_rot = args.class_augmentation
 
@@ -215,6 +218,7 @@ for seed in range(args.seed+1):
             for i, (x, y, task_id) in enumerate(dataloader):
                 frag_preds = []
                 frag_preds_aux = []
+                frag_preds_latent=[]
                 for j in range(strategy.experience_idx + 1):
                     # create a temporary model copy
                     model = freeze_model(deepcopy(strategy.model))
@@ -267,9 +271,12 @@ for seed in range(args.seed+1):
                     #frag_preds.append(torch.softmax(sp / args.temperature, dim=1))
                     frag_preds.append(sp)
                     frag_preds_aux.append(sp)
+                    #frag_preds_latent.append(sp)
+                    frag_preds_latent.append(pred)
 
                 frag_preds = torch.stack(frag_preds)  # [n_frag, bsize, n_classes]
                 frag_preds_aux = torch.stack(frag_preds_aux)
+                frag_preds_latent = torch.stack(frag_preds_latent)
 
                 task_id = task_id.long()
                 n = frag_preds.shape[1]
@@ -282,11 +289,13 @@ for seed in range(args.seed+1):
                 if k == 0:
                     hist_1.append(frag_preds)
                     hist_2.append(frag_preds_aux)
+                    hist_3.append([frag_preds_latent])
                 elif k > 0:
                     frag_preds = (frag_preds + hist_1[i]*k)/(k+1)
                     frag_preds_aux = (frag_preds_aux + hist_2[i]*k)/(k+1)
                     hist_1[i] = frag_preds
                     hist_2[i] = frag_preds_aux
+                    hist_3[i].append(frag_preds_latent)
 
                 batch_size = frag_preds.shape[1]
 
@@ -411,6 +420,39 @@ for seed in range(args.seed+1):
     taw_.append(taw)
     task_.append(task)
 
+
+    ####codice per exp 05/08
+    dist_1 = []
+    dist_2 = []
+    dist_3 = []
+    '''for task in range(10):
+        original = hist_3[task][0]  # shape: (10, 1000, 10)
+        transformed_list = hist_3[task][1:]  # lista di (10, 1000, 10)
+        transformed_tensor = torch.stack(transformed_list)  # shape: (n, 10, 1000, 10)
+        diff = transformed_tensor - original  # shape: (n, 10, 1000, 10)
+        distances = torch.norm(diff, dim=-1)
+        mean_distance = distances.mean(dim=0)
+        dist.append(mean_distance)'''
+
+    '''for task in range(10):
+        for t1, t2 in combinations(hist_3[task], 2):
+            diff = t1 - t2  # shape: (10, 1000, 10)
+            dist = torch.norm(diff, dim=-1)  # distanza per ogni logit -> (10, 1000)
+            dist_1.append(dist)
+        dist_2.append(torch.stack(dist_1).mean(dim=0))
+    dist = torch.cat(dist_2, dim=1)
+    t = task_ids.cpu().numpy()
+
+    print(len(t))
+    print(dist.shape)
+    conf_mat_t = np.zeros((10, 10))
+    for i in range(len(t)):
+        for j in range(10):
+            conf_mat_t[t[i], j] += dist[j][i]
+    plt.imshow(conf_mat_t / conf_mat_t.sum(axis=0), cmap='viridis')
+    plt.colorbar()
+    plt.show()'''
+
     print(f"SEED: {seed}")
     tag_mean = np.mean(np.array(acc_).T, axis=1)
     tag_std = np.std(np.array(acc_).T, axis=1)
@@ -449,6 +491,18 @@ for seed in range(args.seed+1):
     plt.grid(True)
     plt.tight_layout()
     plt.show()'''
+
+    if strategy.experience_idx == 9:
+        # test_teachers(strategy, strategy.test_scenario[:i+1] )
+        print('a')
+        SVCCA_starter(strategy)
+        print('b')
+
+        print("Run Explainability")
+
+        #run_explainability_tools(strategy)
+        print('c')
+        #input()
 
 AA = torch.cat(AA)
 BB = torch.cat(BB)
