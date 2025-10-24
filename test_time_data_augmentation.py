@@ -204,10 +204,12 @@ for seed in range(args.seed+1):
             confusion_mat = torch.zeros((s, s))
             confusion_mat_taw = torch.zeros((s, s))
 
-            confusion_mat_aux = torch.zeros((int(s/args.class_augmentation), s))
+            #confusion_mat_aux = torch.zeros((int(s/args.class_augmentation), s))
+            confusion_mat_aux = torch.zeros((s,s))
 
             y_hats = []
             y_taw = []
+            y_aux = []
             ys = []
             task_ids = []
             task_predictions = []
@@ -218,7 +220,7 @@ for seed in range(args.seed+1):
             for i, (x, y, task_id) in enumerate(dataloader):
                 frag_preds = []
                 frag_preds_aux = []
-                frag_preds_latent=[]
+                frag_preds_latent = []
                 for j in range(strategy.experience_idx + 1):
                     # create a temporary model copy
                     model = freeze_model(deepcopy(strategy.model))
@@ -271,8 +273,8 @@ for seed in range(args.seed+1):
                     #frag_preds.append(torch.softmax(sp / args.temperature, dim=1))
                     frag_preds.append(sp)
                     frag_preds_aux.append(sp)
-                    #frag_preds_latent.append(sp)
-                    frag_preds_latent.append(pred)
+                    frag_preds_latent.append(torch.softmax(pred / args.temperature, dim=1))
+                    #frag_preds_latent.append(pred)
 
                 frag_preds = torch.stack(frag_preds)  # [n_frag, bsize, n_classes]
                 frag_preds_aux = torch.stack(frag_preds_aux)
@@ -306,14 +308,16 @@ for seed in range(args.seed+1):
                 #frag_preds_ = frag_preds_[:, args.classes_per_exp * rot * (1 - args.control):args.classes_per_exp * (
                 #            rot * (1 - args.control) + 1)]
 
-                buff = frag_preds_.max(dim=-1)[0].argsort(dim=0)[-2:]  # [2, bsize]##################################################
+                buff = frag_preds_.max(dim=-1)[0].argsort(dim=0)
                 task_predictions.append(buff[-1])
 
                 # buff_entropy ->  2 x batch_size, entropy values
                 indices = torch.arange(batch_size)
 
-                y_hats.append(frag_preds_[buff[-1], indices].argmax(dim=1) + (args.classes_per_exp + args.extra_classes) *buff[-1])#######################################################
-                y_taw.append(frag_preds_[task_id.to(torch.int32), indices].argmax(dim=-1) + ((args.classes_per_exp + args.extra_classes) * task_id.to(args.cuda)).to(torch.int32))#######
+                y_hats.append(frag_preds_[buff[-1], indices].argmax(dim=1) + (args.classes_per_exp + args.extra_classes)*buff[-1])
+                y_taw.append(frag_preds_[task_id.to(torch.int32), indices].argmax(dim=-1) + ((args.classes_per_exp + args.extra_classes) * task_id.to(args.cuda)).to(torch.int32))
+
+                y_aux.append(frag_preds_latent.argmax(dim=2))
 
                 task_ids.append(task_id)
                 ys.append(y)
@@ -324,6 +328,7 @@ for seed in range(args.seed+1):
             y = torch.cat(ys)
             y_hats = torch.cat(y_hats)
             y_taw = torch.cat(y_taw)
+            y_aux = torch.cat(y_aux, dim=1)
             task_ids = torch.cat(task_ids)
             task_predictions = torch.cat(task_predictions)
             A = torch.cat(A)
@@ -334,6 +339,7 @@ for seed in range(args.seed+1):
             y = y[a < args.classes_per_exp].cpu()
             y_hats = y_hats[a < args.classes_per_exp].cpu()
             y_taw = y_taw[a < args.classes_per_exp].cpu()
+            y_aux = y_aux[:, a < args.classes_per_exp].cpu()
             task_ids = task_ids[a < args.classes_per_exp].cpu()
             task_predictions = task_predictions[a < args.classes_per_exp].cpu()
             A = A[a < args.classes_per_exp].cpu()
@@ -357,20 +363,22 @@ for seed in range(args.seed+1):
             plt.tight_layout()
             plt.show()'''
 
-            '''bins = np.linspace(0, 1, 51)
+            bins = np.linspace(0, 1, 51)
             plt.figure(figsize=(8, 5))
             plt.hist(A_np, bins=bins, color='skyblue', edgecolor='black', alpha=0.6, label='True task', density=True)
             plt.hist(B_np, bins=bins, color='salmon', edgecolor='black', alpha=0.6, label='False tasks', density=True)
-            plt.title("Max value distribution")
-            plt.xlabel("Value")
-            plt.ylabel("Frequency")
+            plt.title(f"Class Augm. Rot. x{args.class_augmentation}", fontsize=25)
+            plt.xlabel("Max Value", fontsize=20)
+            plt.ylabel("Frequency", fontsize=20)
             plt.xlim(0, 1)
-            plt.legend()
+            plt.legend(fontsize=14)
+            plt.xticks(fontsize=12)
+            plt.yticks(fontsize=12)
             plt.tight_layout()
             if seed == 0:
                 plt.show()
 
-            n_sim = 100_000
+            '''n_sim = 100_000
             a_samples = np.random.choice(A_np, size=n_sim)
             b_samples = np.random.choice(B_np, size=(n_sim, 9))
             b_max = np.max(b_samples, axis=1)
@@ -399,9 +407,10 @@ for seed in range(args.seed+1):
             for i in range(y.shape[0]):
                 confusion_mat[y[i], y_hats[i]] += 1
                 confusion_mat_taw[y[i], y_taw[i]] += 1
-            #    for j in range(10):
-            #        m = int(y[i]/(args.classes_per_exp * args.class_augmentation))
-            #        confusion_mat_aux[y[i]-m*(args.classes_per_exp * (args.class_augmentation - 1)), aux_[j, i]+(args.classes_per_exp * args.class_augmentation)*j] += 1
+                for j in range(10):
+                    #m = int(y[i]/(args.classes_per_exp * args.class_augmentation))
+                    #confusion_mat_aux[y[i]-m*(args.classes_per_exp * (args.class_augmentation - 1)), y_aux[j, i]+(args.classes_per_exp * args.class_augmentation)*j] += 1
+                    confusion_mat_aux[y[i], y_aux[j, i] + (args.classes_per_exp * args.class_augmentation) * j] += 1
 
             # task confusion matrix and forgetting mat
             for j in range(strategy.experience_idx + 1):
@@ -453,6 +462,7 @@ for seed in range(args.seed+1):
     plt.colorbar()
     plt.show()'''
 
+
     print(f"SEED: {seed}")
     tag_mean = np.mean(np.array(acc_).T, axis=1)
     tag_std = np.std(np.array(acc_).T, axis=1)
@@ -460,6 +470,25 @@ for seed in range(args.seed+1):
     taw_std = np.std(np.array(taw_).T, axis=1)
     task_mean = np.mean(np.array(task_).T, axis=1)
     task_std = np.std(np.array(task_).T, axis=1)
+
+    #confusion_mat_aux = np.zeros((s, s))
+    #for i in range(s):
+    #    for j in range(s):
+    #        if (i % (args.classes_per_exp*args.class_augmentation)) > args.classes_per_exp:
+    #            pass
+    #        elif i == j:
+    #            confusion_mat_aux[i, j] += taw_mean
+    #        elif int(i/(args.classes_per_exp*args.class_augmentation)) == int(j/(args.classes_per_exp*args.class_augmentation)):
+    #            confusion_mat_aux[i, j] += (1-tag_mean)/(args.classes_per_exp*args.class_augmentation - 1)
+    #        else:
+    #            confusion_mat_aux[i, j] += 1/(args.classes_per_exp*args.class_augmentation)
+
+    plt.imshow(confusion_mat_aux)
+    plt.title("Stacked Confusion Matrix " + args.dataset)
+    plt.xlabel("predicetd class")
+    plt.ylabel("original class")
+    plt.colorbar()
+    plt.show()
 
     #points_of_interest = [0, int(args.n_aug/2), args.n_aug]
     points_of_interest = range(args.n_aug)
@@ -492,16 +521,16 @@ for seed in range(args.seed+1):
     plt.tight_layout()
     plt.show()'''
 
-    if strategy.experience_idx == 9:
-        # test_teachers(strategy, strategy.test_scenario[:i+1] )
-        print('a')
-        SVCCA_starter(strategy)
-        print('b')
+    #if strategy.experience_idx == 9:
+    #    # test_teachers(strategy, strategy.test_scenario[:i+1] )
+    #    print('a')
+    #    SVCCA_starter(strategy)
+    #    print('b')
 
-        print("Run Explainability")
+    #    print("Run Explainability")
 
-        #run_explainability_tools(strategy)
-        print('c')
+    #    #run_explainability_tools(strategy)
+    #    print('c')
         #input()
 
 AA = torch.cat(AA)

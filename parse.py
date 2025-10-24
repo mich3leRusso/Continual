@@ -23,9 +23,12 @@ def get_args():
     parser.add_argument("--control_2", type=int, default=0)
     parser.add_argument("--control_ttda", type=int, default=0)
     parser.add_argument("--class_augmentation", type=int, default=1)
+    parser.add_argument("--aug_type", type=str, default='rotations')
     parser.add_argument("--with_rotations", type=int, default=0)
     parser.add_argument("--n_aug", type=int, default=0)
     parser.add_argument("--softmax_later", type=int, default=0)
+
+    parser.add_argument("--n_clients", type=int, default=10) # <--------- 0 if not federated
 
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--val_split", type=float, default=0.0)

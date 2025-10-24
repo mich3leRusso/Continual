@@ -14,11 +14,12 @@ source /archive/apps/miniconda/miniconda3/py312_2/etc/profile.d/conda.sh
 # Conda activate
 conda activate env_9
 
-class_augmentation=3  #multiplier of the number of classes
+class_augmentation=2  #multiplier of the number of classes
+aug_type="rotations"   #rotations, negative, mix
 rotations=0            #1 if we want to include test time data augmentation, 0 otherwise
-n_aug=2             #maximal number of test time data augmentation in which we are interested in
-train_model=0          #0 if the model have already been trained and do not want to train it again
-n_seed=10              #number of seeds in which we train each experiment
+n_aug=1             #maximal number of test time data augmentation in which we are interested in
+train_model=1          #0 if the model have already been trained and do not want to train it again
+n_seed=1             #number of seeds in which we train each experiment
 control=0            #use the rotations as positive examples instead of using them as negative examples
 control_2=0          #do not use augmented classes but train with them anyway
 control_ttda=0       #do not use the augmentations in training phase
@@ -31,6 +32,10 @@ elif [ "$control_2" -eq 1 ]; then
   run_name="cifar100_control_bis_CA${class_augmentation}"
 else
   run_name="cifar100_CA${class_augmentation}"
+fi
+
+if [[ "$aug_type" != "rotations" ]]; then
+    nuova="${run_name}_${aug_type}"
 fi
 
 if [ "$train_model" -eq 1 ]; then
@@ -50,6 +55,7 @@ if [ "$train_model" -eq 1 ]; then
               --scheduler_distillation 40 \
               --temperature 6.5 \
               --class_augmentation $class_augmentation \
+              --aug_type $aug_type \
               --control $control \
               --control_ttda $control_ttda
   done
@@ -65,6 +71,7 @@ python /davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/test_time_data_augm
         --model "gresnet32" \
         --temperature 6.5 \
         --class_augmentation $class_augmentation \
+        --aug_type $aug_type \
         --with_rotations $rotations \
         --n_aug $n_aug \
         --control $control \

@@ -75,11 +75,11 @@ plot = [
 for j in range(8, len(plot)):
     # Etichette delle curve
     if j < 8:
-        row_labels = ["MIND", "TTDA", "TTDA + rotations"]
+        row_labels = ["No TTDA", "TTDA", "TTDA + rotations"]
     elif j == 8:
         row_labels = ["Data augmentation", "Data augm. artificial classes", "Class augm. rot."]
     elif j == 9:
-        row_labels = ["No augmentations", "rotations + flip", "All augmentations", "flip", "rotations", "color Jittering", "random crop"]
+        row_labels = ["No TTDA", "rotations + flip", "All augmentations", "flip", "rotations", "color Jittering", "random crop"]
     elif (j == 10) | (j == 11):
         row_labels = ["Test time data augmentation"]
     elif (j == 12) | (j == 13):
@@ -121,7 +121,7 @@ for j in range(8, len(plot)):
                 baseline = mean[0]
                 baseline_std = std[0]
                 baseline_y = [baseline] * len(x_vals)
-                plt.plot(x_vals, baseline_y, color=default_colors[0], label='MIND')
+                plt.plot(x_vals, baseline_y, color=default_colors[0], label='No TTDA')
                 lower_baseline = [baseline - baseline_std] * len(x_vals)
                 upper_baseline = [baseline + baseline_std] * len(x_vals)
                 plt.fill_between(x_vals, lower_baseline, upper_baseline, color=default_colors[0], alpha=0.1)

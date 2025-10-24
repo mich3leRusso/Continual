@@ -92,6 +92,10 @@ def main():
         transform_1 = default_transforms_Synbols
         transform_2 = to_tensor_and_normalize_Synbols
 
+    #check if there is consistency with hyperparameters
+    if (args.aug_type == "negative") & ((args.class_augmentation != 2) | (args.dataset != 'CIFAR100')):
+        raise ValueError("Insieme di parametri errati.")
+
     r = args.class_augmentation - 1
 
     if (args.dataset == 'CIFAR100') | (args.dataset == 'Synbols'):
@@ -109,14 +113,44 @@ def main():
     new_x = []
     old_x = train_dataset[0]
     old_y = train_dataset[1]
-    for i in range(len(old_y)):
-        for k in range(r + 1):
-            new_y.append(old_y[i] + args.n_classes * k * (1-args.control))
-            new_x.append(np.rot90(old_x[i], k))
-            #if k == 0:
-            #    new_x.append(np.rot90(old_x[i], k))
-            #else:
-            #    new_x.append(np.rot90(old_x[i], k+old_y[i] % 3))
+
+    if args.aug_type == "rotations":
+        for i in range(len(old_y)):
+            for k in range(r + 1):
+                new_y.append(old_y[i] + args.n_classes * k * (1-args.control))
+                new_x.append(np.rot90(old_x[i], k))
+    elif args.aug_type == "negative":
+        mean = np.array([0.5071, 0.4865, 0.4409], dtype=np.float32)
+        std = np.array([0.2673, 0.2564, 0.2762], dtype=np.float32)
+        for i in range(len(old_y)):
+            for k in range(r + 1):
+                new_y.append(old_y[i] + args.n_classes * k * (1 - args.control))
+                if k == 0:
+                    new_x.append(old_x[i])
+                else:
+                    #new_x.append(255-old_x[i])
+                    img_norm = - (old_x[i] - mean) / std
+                    img_denorm = img_norm * std + mean
+                    new_x.append(img_denorm)
+    elif args.aug_type == "mix":
+        seen_data = [[]]*len(class_order)
+        for i in range(len(old_y)):
+            for k in range(r+1):
+                if k == 0:
+                    new_x.append(old_x[i])
+                    new_y.append(old_y[i] + args.n_classes * k * (1 - args.control))
+                else:
+                    if (old_y[i]+1) % args.classes_per_exp == 0:
+                        m = old_y[i] - args.classes_per_exp + k
+                    else:
+                        m = old_y[i] + k
+
+                    if len(seen_data[m]) != 0:
+                        new_x.append((old_x[i]+seen_data[m])/2)
+                        new_y.append(old_y[i] + args.n_classes * k * (1 - args.control))
+
+                    seen_data[old_y[i]] = old_x[i]
+
     new_x = np.array(new_x)
     new_y = np.array(new_y)
 
@@ -134,6 +168,22 @@ def main():
                 class_order.append(int(classes_in_task[j]))
 
     train_dataset = InMemoryDataset(new_x, new_y)
+
+    if args.n_clients > 0:
+        n_splits = args.n_clients
+        n_samples = new_x.shape[0] // args.class_augmentation
+        group_indices = np.arange(n_samples)
+        np.random.shuffle(group_indices)
+        split_size = n_samples // n_splits
+        train_dataset_fed = []
+        for i in range(n_splits):
+            start = i * split_size
+            end = (i + 1) * split_size if i < n_splits - 1 else n_samples
+            g_idx = group_indices[start:end]
+            idx = np.concatenate([np.arange(g * args.class_augmentation, (g + 1) * args.class_augmentation) for g in g_idx])
+            xi = new_x[idx]
+            yi = new_y[idx]
+            train_dataset_fed.append(InMemoryDataset(xi, yi))
 
     # modifying test set
     new_y = []
@@ -156,19 +206,34 @@ def main():
         class_order=class_order,
         transformations=transform_1)
 
+    if args.n_clients > 0:
+        strategy.train_scenario_fed = []
+        for i in range(args.n_clients):
+            strategy.train_scenario_fed.append(ClassIncremental(
+                train_dataset_fed[i],
+                increment=args.classes_per_exp + args.extra_classes,
+                class_order=class_order,
+                transformations=transform_1))
+
     strategy.test_scenario = ClassIncremental(
         test_dataset,
         increment=args.classes_per_exp + args.extra_classes,
         class_order=class_order,
         transformations=transform_2)
 
-    print(f"Number of classes: {strategy.train_scenario.nb_classes}.")
-    print(f"Number of tasks: {strategy.train_scenario.nb_tasks}.")
+    if args.n_clients == 0:
+        print(f"Number of classes: {strategy.train_scenario.nb_classes}.")
+        print(f"Number of tasks: {strategy.train_scenario.nb_tasks}.")
 
     if args.load_model_from_run:
         strategy.pruner.masks = torch.load(project_path + f"//logs/{args.load_model_from_run}/checkpoints/masks.pt")
 
     for i, train_taskset in enumerate(strategy.train_scenario):
+
+        strategy.train_taskset_fed = []
+        for j in range(args.n_clients):
+            strategy.train_taskset_fed.append(strategy.train_scenario_fed[j][i])
+
         if args.packnet_original:
             with torch.no_grad():
                 strategy.pruner.dezero(strategy.model)
@@ -181,6 +246,9 @@ def main():
         # prepare dataset
         strategy.train_taskset, strategy.val_taskset = split_train_val(train_taskset, val_split=args.val_split)
         strategy.train_dataloader = DataLoader(strategy.train_taskset, batch_size=args.bsize, shuffle=True)
+        strategy.train_dataloader_fed = []
+        for j in range(args.n_clients):
+            strategy.train_dataloader_fed.append(DataLoader(strategy.train_taskset_fed[i], batch_size=args.bsize, shuffle=True))
         if len(strategy.val_taskset):
             strategy.val_dataloader = DataLoader(strategy.val_taskset, batch_size=args.bsize, shuffle=True)
         else:
@@ -192,6 +260,9 @@ def main():
         if not args.self_distillation:
             if args.model == 'gresnet32':
                 strategy.fresh_model = gresnet32(dropout_rate=args.dropout)
+                strategy.fresh_model_clients = []
+                for j in range(args.n_clients):
+                    strategy.fresh_model_clients.append(gresnet32(dropout_rate=args.dropout))
             elif args.model == 'gresnet18':
                 strategy.fresh_model = gresnet18(num_classes=args.n_classes)
             elif args.model == 'gresnet18mlp':
@@ -206,6 +277,9 @@ def main():
         strategy.fresh_model.to(args.device)
         #print(train_taskset.get_classes())
         strategy.fresh_model.set_output_mask(i, train_taskset.get_classes())
+        for j in range(args.n_clients):
+            strategy.fresh_model_clients[j].to(args.device)
+            strategy.fresh_model_clients[j].set_output_mask(i, train_taskset.get_classes())
 
         # instantiate oprimizer
         strategy.train_epochs = args.epochs
@@ -218,12 +292,16 @@ def main():
         # Freeze the model for distillation purposes
         strategy.distill_model = freeze_model(deepcopy(strategy.fresh_model))
         strategy.distill_model.to(args.device)
+        strategy.distill_model_clients = []
+        for j in range(args.n_clients):
+            strategy.distill_model_clients.append(freeze_model(deepcopy(strategy.fresh_model_clients[j])))
 
         ########### FINETUNING/DISTILLATION ################
         # selects subset of neurons, prune non selected weights
         if not args.load_model_from_run:
             with torch.no_grad():
                 strategy.pruner.prune(strategy.model, strategy.experience_idx, strategy.distill_model, args.self_distillation)
+
 
         strategy.train_epochs = args.epochs_distillation
         strategy.distillation = True
@@ -250,17 +328,6 @@ def main():
             torch.save(strategy.model.state_dict(), project_path + f"/logs/{args.run_name}/checkpoints/weights.pt")
             torch.save(strategy.pruner.masks, project_path + f"/logs/{args.run_name}/checkpoints/masks.pt")
             pkl.dump(strategy.model.bn_weights, open(project_path + f"/logs/{args.run_name}/checkpoints/bn_weights.pkl", "wb"))
-
-        if strategy.experience_idx == 9:
-            # test_teachers(strategy, strategy.test_scenario[:i+1] )
-
-            SVCCA_starter(strategy)
-            input()
-
-            print("Run Explainability")
-
-            run_explainability_tools(strategy)
-
 
 if __name__ == "__main__":
 
