@@ -1,18 +1,6 @@
-# MIND
-Authors: Jacopo Bonato, Francesco Pelosin, Luigi Sabetta, Alessandro Nicolosi
+# Class Incremental Learning with Class Augmentation + Test Time Data Augmentation
 
-Preprint: 
-https://arxiv.org/abs/2312.02916
-
-# Installation
-
-- Step 1:
-
-    Build the docker image from the Dockerfile : `docker build -f Dockerfile -t mind:1.0 . `
-
-- Step 2:
-
-    Run your image : `docker run -it --gpus all -v "/path_to_dataset_folder":/root/data -v "/path_to_MIND_folder":/MIND mind:1.0 /bin/bash`
+## What is Class Incremental Learning ?
 
 
 # Experiements
@@ -28,6 +16,7 @@ To run the experiments on CIFAR100/10 dataset in class incremental (Table 1.A), 
 
 ```
 sh cifar100_exp.sh
+
 ```
 all the outputs will be logged in the `./logs/cifar100_experiment` folder (accuracies, losses, plots) and in the terminal.
 
