@@ -2,6 +2,13 @@
 
 ## What is Class Incremental Learning ?
 
+Class-Incremental Learning (CIL) addresses the problem of training machine learning models in continually evolving environments, where new classes become available over time. Unlike traditional supervised learning, which assumes access to all classes and data at once, CIL requires a model to learn new classes sequentially while retaining knowledge of previously learned ones.
+
+A core challenge in class-incremental learning is catastrophic forgetting: when a model updates its parameters to learn new classes, its performance on earlier classes may significantly degrade. This makes naïve fine-tuning unsuitable for incremental scenarios.
+
+![Class Incremental Learning settibng](images/CIL.png)
+
+## How Do we solve the problem?
 
 # Experiements
 
