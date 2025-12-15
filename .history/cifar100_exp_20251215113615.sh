@@ -14,7 +14,7 @@ source /archive/apps/miniconda/miniconda3/py312_2/etc/profile.d/conda.sh
 # Conda activate
 conda activate MIND_new
 
-class_augmentation=1  #multiplier of the number of classes
+class_augmentation=2  #multiplier of the number of classes
 aug_type="rotations"   #rotations, negative, mix
 rotations=0            #1 if we want to include test time data augmentation, 0 otherwise
 n_aug=1             #maximal number of test time data augmentation in which we are interested in
@@ -41,7 +41,7 @@ fi
 if [ "$train_model" -eq 1 ]; then
   for seed in $(seq 0 $((n_seed-1)))
   do
-      python /davinci-1/home/micherusso/PycharmProjects/Continual/main.py --run_name $run_name \
+      python /davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/main.py --run_name $run_name \
               --dataset "CIFAR100" \
               --cuda 0 \
               --seed $seed \
@@ -63,17 +63,17 @@ fi
 
 n_seed=10
 
-# python /davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/test_time_data_augmentation.py --run_name $run_name \
-#         --dataset "CIFAR100" \
-#         --cuda 0 \
-#         --seed $((n_seed-1))\
-#         --n_experiences 10 \
-#         --model "gresnet32" \
-#         --temperature 6.5 \
-#         --class_augmentation $class_augmentation \
-#         --aug_type $aug_type \
-#         --with_rotations $rotations \
-#         --n_aug $n_aug \
-#         --control $control \
-#         --control_2 $control_2 \
-#         --softmax_later 0
+python /davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/test_time_data_augmentation.py --run_name $run_name \
+        --dataset "CIFAR100" \
+        --cuda 0 \
+        --seed $((n_seed-1))\
+        --n_experiences 10 \
+        --model "gresnet32" \
+        --temperature 6.5 \
+        --class_augmentation $class_augmentation \
+        --aug_type $aug_type \
+        --with_rotations $rotations \
+        --n_aug $n_aug \
+        --control $control \
+        --control_2 $control_2 \
+        --softmax_later 0

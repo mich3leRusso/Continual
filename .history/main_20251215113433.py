@@ -32,7 +32,7 @@ def main():
     #data_path = os.path.expanduser('/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/data_64x64')
     project_path = '/davinci-1/home/dmor/PycharmProjects/Refactoring_MIND'
     data_path = project_path + '/data'
-    data_path = "/archive/HPCLab_exchange/4Mor"
+    pro
     # set seed
     set_seed(args.seed)
 
@@ -169,6 +169,21 @@ def main():
 
     train_dataset = InMemoryDataset(new_x, new_y)
 
+    if args.n_clients > 0:
+        n_splits = args.n_clients
+        n_samples = new_x.shape[0] // args.class_augmentation
+        group_indices = np.arange(n_samples)
+        np.random.shuffle(group_indices)
+        split_size = n_samples // n_splits
+        train_dataset_fed = []
+        for i in range(n_splits):
+            start = i * split_size
+            end = (i + 1) * split_size if i < n_splits - 1 else n_samples
+            g_idx = group_indices[start:end]
+            idx = np.concatenate([np.arange(g * args.class_augmentation, (g + 1) * args.class_augmentation) for g in g_idx])
+            xi = new_x[idx]
+            yi = new_y[idx]
+            train_dataset_fed.append(InMemoryDataset(xi, yi))
 
     # modifying test set
     new_y = []
@@ -191,20 +206,34 @@ def main():
         class_order=class_order,
         transformations=transform_1)
 
-    
+    if args.n_clients > 0:
+        strategy.train_scenario_fed = []
+        for i in range(args.n_clients):
+            strategy.train_scenario_fed.append(ClassIncremental(
+                train_dataset_fed[i],
+                increment=args.classes_per_exp + args.extra_classes,
+                class_order=class_order,
+                transformations=transform_1))
+
     strategy.test_scenario = ClassIncremental(
         test_dataset,
         increment=args.classes_per_exp + args.extra_classes,
         class_order=class_order,
         transformations=transform_2)
 
+    if args.n_clients == 0:
+        print(f"Number of classes: {strategy.train_scenario.nb_classes}.")
+        print(f"Number of tasks: {strategy.train_scenario.nb_tasks}.")
 
     if args.load_model_from_run:
         strategy.pruner.masks = torch.load(project_path + f"//logs/{args.load_model_from_run}/checkpoints/masks.pt")
 
     for i, train_taskset in enumerate(strategy.train_scenario):
 
-       
+        strategy.train_taskset_fed = []
+        for j in range(args.n_clients):
+            strategy.train_taskset_fed.append(strategy.train_scenario_fed[j][i])
+
         if args.packnet_original:
             with torch.no_grad():
                 strategy.pruner.dezero(strategy.model)
@@ -217,7 +246,9 @@ def main():
         # prepare dataset
         strategy.train_taskset, strategy.val_taskset = split_train_val(train_taskset, val_split=args.val_split)
         strategy.train_dataloader = DataLoader(strategy.train_taskset, batch_size=args.bsize, shuffle=True)
-        
+        strategy.train_dataloader_fed = []
+        for j in range(args.n_clients):
+            strategy.train_dataloader_fed.append(DataLoader(strategy.train_taskset_fed[i], batch_size=args.bsize, shuffle=True))
         if len(strategy.val_taskset):
             strategy.val_dataloader = DataLoader(strategy.val_taskset, batch_size=args.bsize, shuffle=True)
         else:
@@ -229,6 +260,9 @@ def main():
         if not args.self_distillation:
             if args.model == 'gresnet32':
                 strategy.fresh_model = gresnet32(dropout_rate=args.dropout)
+                strategy.fresh_model_clients = []
+                for j in range(args.n_clients):
+                    strategy.fresh_model_clients.append(gresnet32(dropout_rate=args.dropout))
             elif args.model == 'gresnet18':
                 strategy.fresh_model = gresnet18(num_classes=args.n_classes)
             elif args.model == 'gresnet18mlp':
@@ -243,7 +277,10 @@ def main():
         strategy.fresh_model.to(args.device)
         #print(train_taskset.get_classes())
         strategy.fresh_model.set_output_mask(i, train_taskset.get_classes())
-        
+        for j in range(args.n_clients):
+            strategy.fresh_model_clients[j].to(args.device)
+            strategy.fresh_model_clients[j].set_output_mask(i, train_taskset.get_classes())
+
         # instantiate oprimizer
         strategy.train_epochs = args.epochs
         strategy.distillation = False
@@ -255,7 +292,10 @@ def main():
         # Freeze the model for distillation purposes
         strategy.distill_model = freeze_model(deepcopy(strategy.fresh_model))
         strategy.distill_model.to(args.device)
-        
+        strategy.distill_model_clients = []
+        for j in range(args.n_clients):
+            strategy.distill_model_clients.append(freeze_model(deepcopy(strategy.fresh_model_clients[j])))
+
         ########### FINETUNING/DISTILLATION ################
         # selects subset of neurons, prune non selected weights
         if not args.load_model_from_run:

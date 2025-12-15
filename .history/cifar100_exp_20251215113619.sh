@@ -41,7 +41,7 @@ fi
 if [ "$train_model" -eq 1 ]; then
   for seed in $(seq 0 $((n_seed-1)))
   do
-      python /davinci-1/home/micherusso/PycharmProjects/Continual/main.py --run_name $run_name \
+      python /davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/main.py --run_name $run_name \
               --dataset "CIFAR100" \
               --cuda 0 \
               --seed $seed \
@@ -63,17 +63,17 @@ fi
 
 n_seed=10
 
-# python /davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/test_time_data_augmentation.py --run_name $run_name \
-#         --dataset "CIFAR100" \
-#         --cuda 0 \
-#         --seed $((n_seed-1))\
-#         --n_experiences 10 \
-#         --model "gresnet32" \
-#         --temperature 6.5 \
-#         --class_augmentation $class_augmentation \
-#         --aug_type $aug_type \
-#         --with_rotations $rotations \
-#         --n_aug $n_aug \
-#         --control $control \
-#         --control_2 $control_2 \
-#         --softmax_later 0
+python /davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/test_time_data_augmentation.py --run_name $run_name \
+        --dataset "CIFAR100" \
+        --cuda 0 \
+        --seed $((n_seed-1))\
+        --n_experiences 10 \
+        --model "gresnet32" \
+        --temperature 6.5 \
+        --class_augmentation $class_augmentation \
+        --aug_type $aug_type \
+        --with_rotations $rotations \
+        --n_aug $n_aug \
+        --control $control \
+        --control_2 $control_2 \
+        --softmax_later 0

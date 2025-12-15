@@ -217,7 +217,9 @@ def main():
         # prepare dataset
         strategy.train_taskset, strategy.val_taskset = split_train_val(train_taskset, val_split=args.val_split)
         strategy.train_dataloader = DataLoader(strategy.train_taskset, batch_size=args.bsize, shuffle=True)
-        
+        strategy.train_dataloader_fed = []
+        for j in range(args.n_clients):
+            strategy.train_dataloader_fed.append(DataLoader(strategy.train_taskset_fed[i], batch_size=args.bsize, shuffle=True))
         if len(strategy.val_taskset):
             strategy.val_dataloader = DataLoader(strategy.val_taskset, batch_size=args.bsize, shuffle=True)
         else:
@@ -229,6 +231,9 @@ def main():
         if not args.self_distillation:
             if args.model == 'gresnet32':
                 strategy.fresh_model = gresnet32(dropout_rate=args.dropout)
+                strategy.fresh_model_clients = []
+                for j in range(args.n_clients):
+                    strategy.fresh_model_clients.append(gresnet32(dropout_rate=args.dropout))
             elif args.model == 'gresnet18':
                 strategy.fresh_model = gresnet18(num_classes=args.n_classes)
             elif args.model == 'gresnet18mlp':
@@ -243,7 +248,10 @@ def main():
         strategy.fresh_model.to(args.device)
         #print(train_taskset.get_classes())
         strategy.fresh_model.set_output_mask(i, train_taskset.get_classes())
-        
+        for j in range(args.n_clients):
+            strategy.fresh_model_clients[j].to(args.device)
+            strategy.fresh_model_clients[j].set_output_mask(i, train_taskset.get_classes())
+
         # instantiate oprimizer
         strategy.train_epochs = args.epochs
         strategy.distillation = False
@@ -255,7 +263,10 @@ def main():
         # Freeze the model for distillation purposes
         strategy.distill_model = freeze_model(deepcopy(strategy.fresh_model))
         strategy.distill_model.to(args.device)
-        
+        strategy.distill_model_clients = []
+        for j in range(args.n_clients):
+            strategy.distill_model_clients.append(freeze_model(deepcopy(strategy.fresh_model_clients[j])))
+
         ########### FINETUNING/DISTILLATION ################
         # selects subset of neurons, prune non selected weights
         if not args.load_model_from_run:

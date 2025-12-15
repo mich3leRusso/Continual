@@ -41,7 +41,7 @@ fi
 if [ "$train_model" -eq 1 ]; then
   for seed in $(seq 0 $((n_seed-1)))
   do
-      python /davinci-1/home/micherusso/PycharmProjects/Continual/main.py --run_name $run_name \
+      python /davinci-1/home/micherusso/PycharmProjects/Refactoring_MIND/main.py --run_name $run_name \
               --dataset "CIFAR100" \
               --cuda 0 \
               --seed $seed \

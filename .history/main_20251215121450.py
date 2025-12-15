@@ -243,7 +243,10 @@ def main():
         strategy.fresh_model.to(args.device)
         #print(train_taskset.get_classes())
         strategy.fresh_model.set_output_mask(i, train_taskset.get_classes())
-        
+        for j in range(args.n_clients):
+            strategy.fresh_model_clients[j].to(args.device)
+            strategy.fresh_model_clients[j].set_output_mask(i, train_taskset.get_classes())
+
         # instantiate oprimizer
         strategy.train_epochs = args.epochs
         strategy.distillation = False
@@ -255,7 +258,10 @@ def main():
         # Freeze the model for distillation purposes
         strategy.distill_model = freeze_model(deepcopy(strategy.fresh_model))
         strategy.distill_model.to(args.device)
-        
+        strategy.distill_model_clients = []
+        for j in range(args.n_clients):
+            strategy.distill_model_clients.append(freeze_model(deepcopy(strategy.fresh_model_clients[j])))
+
         ########### FINETUNING/DISTILLATION ################
         # selects subset of neurons, prune non selected weights
         if not args.load_model_from_run:

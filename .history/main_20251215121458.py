@@ -255,7 +255,10 @@ def main():
         # Freeze the model for distillation purposes
         strategy.distill_model = freeze_model(deepcopy(strategy.fresh_model))
         strategy.distill_model.to(args.device)
-        
+        strategy.distill_model_clients = []
+        for j in range(args.n_clients):
+            strategy.distill_model_clients.append(freeze_model(deepcopy(strategy.fresh_model_clients[j])))
+
         ########### FINETUNING/DISTILLATION ################
         # selects subset of neurons, prune non selected weights
         if not args.load_model_from_run:

@@ -1,0 +1,26 @@
+{
+    "sourceFile": "core50ci_exp.sh",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 2,
+            "patches": [
+                {
+                    "date": 1765794942946,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                },
+                {
+                    "date": 1765794950070,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -11,9 +11,9 @@\n \n # Add conda to source\n source /archive/apps/miniconda/miniconda3/py312_2/etc/profile.d/conda.sh\n # Conda activate\n-conda activate \n+conda activate M\n \n class_augmentation=2  #multiplier of the number of classes\n rotations=0           #1 if we want to include test time data augmentation, 0 otherwise\n n_aug=1              #maximal number of test time data augmentation in which we are interested in\n"
+                },
+                {
+                    "date": 1765794956593,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -11,11 +11,11 @@\n \n # Add conda to source\n source /archive/apps/miniconda/miniconda3/py312_2/etc/profile.d/conda.sh\n # Conda activate\n-conda activate M\n+conda activate MIND_new\n \n-class_augmentation=2  #multiplier of the number of classes\n+class_augmentation= #multiplier of the number of classes\n rotations=0           #1 if we want to include test time data augmentation, 0 otherwise\n n_aug=1              #maximal number of test time data augmentation in which we are interested in\n train_model=0         #0 if the model have already been trained and do not want to train it again\n n_seed=1              #number of seeds in which we train each experiment\n"
+                }
+            ],
+            "date": 1765794942946,
+            "name": "Commit-0",
+            "content": "#!/bin/bash\n\n#PBS -N Core50_CA2_R1\n#PBS -o exp.txt\n#PBS -q gpu\n#PBS -e exp.txt\n#PBS -k oe\n#PBS -m e\n#PBS -M davide.mor@leonardo.com\n#PBS -l select=1:ngpus=1:ncpus=12,walltime=720:00:00\n\n# Add conda to source\nsource /archive/apps/miniconda/miniconda3/py312_2/etc/profile.d/conda.sh\n# Conda activate\nconda activate \n\nclass_augmentation=2  #multiplier of the number of classes\nrotations=0           #1 if we want to include test time data augmentation, 0 otherwise\nn_aug=1              #maximal number of test time data augmentation in which we are interested in\ntrain_model=0         #0 if the model have already been trained and do not want to train it again\nn_seed=1              #number of seeds in which we train each experiment\n\nrun_name=\"core50ci_CA${class_augmentation}\"\n\nif [ \"$train_model\" -eq 1 ]; then\n  for seed in $(seq 0 $((n_seed-1)))\n  do\n      python /davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/main.py --run_name $run_name \\\n              --dataset \"CORE50_CI\" \\\n              --cuda 0 \\\n              --seed $seed \\\n              --n_experiences 10 \\\n              --model \"gresnet32\" \\\n              --epochs 20 \\\n              --lr 0.005 \\\n              --scheduler 15 \\\n              --epochs_distillation 20 \\\n              --lr_distillation 0.035 \\\n              --scheduler_distillation 15 \\\n              --temperature 3 \\\n              --class_augmentation $class_augmentation\n  done\nfi\n\npython /davinci-1/home/dmor/PycharmProjects/Refactoring_MIND/test_time_data_augmentation.py --run_name $run_name \\\n        --dataset \"CORE50_CI\" \\\n        --cuda 0 \\\n        --seed $((n_seed-1))\\\n        --n_experiences 10 \\\n        --model \"gresnet32\" \\\n        --temperature 3 \\\n        --class_augmentation $class_augmentation \\\n        --with_rotations $rotations \\\n        --n_aug $n_aug"
+        }
+    ]
+}
